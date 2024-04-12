@@ -2,6 +2,7 @@ package common
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -15,7 +16,7 @@ type Config struct {
 	Interactive    bool
 
 	AppFolder    string
-	BinFolder    string
+	PluginFolder string
 	DataFolder   string
 	OutputFolder string
 	ServerFolder string
@@ -34,11 +35,13 @@ type Config struct {
 	JsonTechnicalAssetsFilename string
 	JsonStatsFilename           string
 	TemplateFilename            string
+	TechnologyFilename          string
 
 	RAAPlugin         string
 	RiskRulesPlugins  []string
-	SkipRiskRules     string
+	SkipRiskRules     []string
 	ExecuteModelMacro string
+	RiskExcel         RiskExcelConfig
 
 	ServerMode               bool
 	DiagramDPI               int
@@ -54,13 +57,20 @@ type Config struct {
 	Attractiveness Attractiveness
 }
 
+type RiskExcelConfig struct {
+	HideColumns    []string
+	SortByColumns  []string
+	WidthOfColumns map[string]float64
+}
+
 func (c *Config) Defaults(buildTimestamp string) *Config {
 	*c = Config{
 		BuildTimestamp: buildTimestamp,
 		Verbose:        false,
+		Interactive:    false,
 
 		AppFolder:    AppDir,
-		BinFolder:    BinDir,
+		PluginFolder: PluginDir,
 		DataFolder:   DataDir,
 		OutputFolder: OutputDir,
 		ServerFolder: ServerDir,
@@ -79,14 +89,22 @@ func (c *Config) Defaults(buildTimestamp string) *Config {
 		JsonTechnicalAssetsFilename: JsonTechnicalAssetsFilename,
 		JsonStatsFilename:           JsonStatsFilename,
 		TemplateFilename:            TemplateFilename,
-		RAAPlugin:                   RAAPluginName,
-		RiskRulesPlugins:            make([]string, 0),
-		SkipRiskRules:               "",
-		ExecuteModelMacro:           "",
-		ServerMode:                  false,
-		ServerPort:                  DefaultServerPort,
+		TechnologyFilename:          "",
 
+		RAAPlugin:         RAAPluginName,
+		RiskRulesPlugins:  make([]string, 0),
+		SkipRiskRules:     make([]string, 0),
+		ExecuteModelMacro: "",
+		RiskExcel: RiskExcelConfig{
+			HideColumns:   make([]string, 0),
+			SortByColumns: make([]string, 0),
+		},
+
+		ServerMode:               false,
+		DiagramDPI:               DefaultDiagramDPI,
+		ServerPort:               DefaultServerPort,
 		GraphvizDPI:              DefaultGraphvizDPI,
+		MaxGraphvizDPI:           MaxGraphvizDPI,
 		BackupHistoryFilesToKeep: DefaultBackupHistoryFilesToKeep,
 
 		AddModelTitle:              false,
@@ -140,37 +158,49 @@ func (c *Config) Load(configFilename string) error {
 
 	c.Merge(config, values)
 
+	errorList := make([]error, 0)
 	c.TempFolder = c.CleanPath(c.TempFolder)
 	tempDirError := os.MkdirAll(c.TempFolder, 0700)
 	if tempDirError != nil {
-		return fmt.Errorf("failed to create temp dir %q: %v", c.TempFolder, tempDirError)
+		errorList = append(errorList, fmt.Errorf("failed to create temp dir %q: %v", c.TempFolder, tempDirError))
 	}
 
 	c.OutputFolder = c.CleanPath(c.OutputFolder)
 	outDirError := os.MkdirAll(c.OutputFolder, 0700)
 	if outDirError != nil {
-		return fmt.Errorf("failed to create output dir %q: %v", c.OutputFolder, outDirError)
+		errorList = append(errorList, fmt.Errorf("failed to create output dir %q: %v", c.OutputFolder, outDirError))
 	}
 
 	c.AppFolder = c.CleanPath(c.AppFolder)
 	appDirError := c.checkDir(c.AppFolder, "app")
 	if appDirError != nil {
-		return appDirError
+		errorList = append(errorList, appDirError)
 	}
 
-	c.BinFolder = c.CleanPath(c.BinFolder)
-	binDirError := c.checkDir(c.BinFolder, "bin")
+	c.PluginFolder = c.CleanPath(c.PluginFolder)
+	binDirError := c.checkDir(c.PluginFolder, "plugin")
 	if binDirError != nil {
-		return binDirError
+		errorList = append(errorList, binDirError)
 	}
 
 	c.DataFolder = c.CleanPath(c.DataFolder)
 	dataDirError := c.checkDir(c.DataFolder, "data")
 	if dataDirError != nil {
-		return dataDirError
+		errorList = append(errorList, dataDirError)
 	}
 
-	return c.CheckServerFolder()
+	c.TechnologyFilename = c.CleanPath(c.TechnologyFilename)
+
+	serverFolderError := c.CheckServerFolder()
+	if serverFolderError != nil {
+		errorList = append(errorList, serverFolderError)
+	}
+
+	if len(errorList) > 0 {
+		return errors.Join(errorList...)
+	}
+
+	return nil
 }
 
 func (c *Config) CheckServerFolder() error {
@@ -199,8 +229,8 @@ func (c *Config) Merge(config Config, values map[string]any) {
 		case strings.ToLower("AppFolder"):
 			c.AppFolder = config.AppFolder
 
-		case strings.ToLower("BinFolder"):
-			c.BinFolder = config.BinFolder
+		case strings.ToLower("PluginFolder"):
+			c.PluginFolder = config.PluginFolder
 
 		case strings.ToLower("DataFolder"):
 			c.DataFolder = config.DataFolder
@@ -253,11 +283,39 @@ func (c *Config) Merge(config Config, values map[string]any) {
 		case strings.ToLower("TemplateFilename"):
 			c.TemplateFilename = config.TemplateFilename
 
+		case strings.ToLower("TechnologyFilename"):
+			c.TechnologyFilename = config.TechnologyFilename
+
 		case strings.ToLower("RAAPlugin"):
 			c.RAAPlugin = config.RAAPlugin
 
 		case strings.ToLower("RiskRulesPlugins"):
 			c.RiskRulesPlugins = config.RiskRulesPlugins
+
+		case strings.ToLower("RiskExcel"):
+			configMap, mapOk := values[key].(map[string]any)
+			if !mapOk {
+				continue
+			}
+
+			for valueName := range configMap {
+				switch strings.ToLower(valueName) {
+				case strings.ToLower("HideColumns"):
+					c.RiskExcel.HideColumns = append(c.RiskExcel.HideColumns, config.RiskExcel.HideColumns...)
+
+				case strings.ToLower("SortByColumns"):
+					c.RiskExcel.SortByColumns = append(c.RiskExcel.SortByColumns, config.RiskExcel.SortByColumns...)
+
+				case strings.ToLower("WidthOfColumns"):
+					if c.RiskExcel.WidthOfColumns == nil {
+						c.RiskExcel.WidthOfColumns = make(map[string]float64)
+					}
+
+					for name, value := range config.RiskExcel.WidthOfColumns {
+						c.RiskExcel.WidthOfColumns[name] = value
+					}
+				}
+			}
 
 		case strings.ToLower("SkipRiskRules"):
 			c.SkipRiskRules = config.SkipRiskRules

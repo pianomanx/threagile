@@ -6,7 +6,6 @@ package types
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"gopkg.in/yaml.v3"
 	"strings"
@@ -31,17 +30,11 @@ func AuthorizationValues() []TypeEnum {
 var AuthorizationTypeDescription = [...]TypeDescription{
 	{"none", "No authorization"},
 	{"technical-user", "Technical user (service-to-service) like DB user credentials"},
-	{"enduser-identity-propagation", "Identity of end user propagates to this service"},
+	{"end-user-identity-propagation", "Identity of end user propagates to this service"},
 }
 
 func ParseAuthorization(value string) (authorization Authorization, err error) {
-	value = strings.TrimSpace(value)
-	for _, candidate := range AuthorizationValues() {
-		if candidate.String() == value {
-			return candidate.(Authorization), err
-		}
-	}
-	return authorization, errors.New("Unable to parse into type: " + value)
+	return Authorization(0).Find(value)
 }
 
 func (what Authorization) String() string {
@@ -51,6 +44,16 @@ func (what Authorization) String() string {
 
 func (what Authorization) Explain() string {
 	return AuthorizationTypeDescription[what].Description
+}
+
+func (what Authorization) Find(value string) (Authorization, error) {
+	for index, description := range AuthorizationTypeDescription {
+		if strings.EqualFold(value, description.Name) {
+			return Authorization(index), nil
+		}
+	}
+
+	return Authorization(0), fmt.Errorf("unknown authorization value %q", value)
 }
 
 func (what Authorization) MarshalJSON() ([]byte, error) {
@@ -64,7 +67,7 @@ func (what *Authorization) UnmarshalJSON(data []byte) error {
 		return unmarshalError
 	}
 
-	value, findError := what.find(text)
+	value, findError := what.Find(text)
 	if findError != nil {
 		return findError
 	}
@@ -78,21 +81,11 @@ func (what Authorization) MarshalYAML() (interface{}, error) {
 }
 
 func (what *Authorization) UnmarshalYAML(node *yaml.Node) error {
-	value, findError := what.find(node.Value)
+	value, findError := what.Find(node.Value)
 	if findError != nil {
 		return findError
 	}
 
 	*what = value
 	return nil
-}
-
-func (what Authorization) find(value string) (Authorization, error) {
-	for index, description := range AuthorizationTypeDescription {
-		if strings.EqualFold(value, description.Name) {
-			return Authorization(index), nil
-		}
-	}
-
-	return Authorization(0), fmt.Errorf("unknown authorization value %q", value)
 }

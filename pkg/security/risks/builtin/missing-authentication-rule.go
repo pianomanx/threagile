@@ -10,9 +10,9 @@ func NewMissingAuthenticationRule() *MissingAuthenticationRule {
 	return &MissingAuthenticationRule{}
 }
 
-func (*MissingAuthenticationRule) Category() types.RiskCategory {
-	return types.RiskCategory{
-		Id:          "missing-authentication",
+func (*MissingAuthenticationRule) Category() *types.RiskCategory {
+	return &types.RiskCategory{
+		ID:          "missing-authentication",
 		Title:       "Missing Authentication",
 		Description: "Technical assets (especially multi-tenant systems) should authenticate incoming requests when the asset processes sensitive data. ",
 		Impact:      "If this risk is unmitigated, attackers might be able to access or modify sensitive data in an unauthenticated way.",
@@ -24,7 +24,7 @@ func (*MissingAuthenticationRule) Category() types.RiskCategory {
 		Check:    "Are recommendations from the linked cheat sheet and referenced ASVS chapter applied?",
 		Function: types.Architecture,
 		STRIDE:   types.ElevationOfPrivilege,
-		DetectionLogic: "In-scope technical assets (except " + types.LoadBalancer.String() + ", " + types.ReverseProxy.String() + ", " + types.ServiceRegistry.String() + ", " + types.WAF.String() + ", " + types.IDS.String() + ", and " + types.IPS.String() + " and in-process calls) should authenticate incoming requests when the asset processes " +
+		DetectionLogic: "In-scope technical assets (except " + types.LoadBalancer + ", " + types.ReverseProxy + ", " + types.ServiceRegistry + ", " + types.WAF + ", " + types.IDS + ", and " + types.IPS + " and in-process calls) should authenticate incoming requests when the asset processes " +
 			"sensitive data. This is especially the case for all multi-tenant assets (there even non-sensitive ones).",
 		RiskAssessment: "The risk rating (medium or high) " +
 			"depends on the sensitivity of the data sent across the communication link. Monitoring callers are exempted from this risk.",
@@ -39,23 +39,23 @@ func (*MissingAuthenticationRule) SupportedTags() []string {
 	return []string{}
 }
 
-func (r *MissingAuthenticationRule) GenerateRisks(input *types.ParsedModel) []types.Risk {
-	risks := make([]types.Risk, 0)
+func (r *MissingAuthenticationRule) GenerateRisks(input *types.Model) ([]*types.Risk, error) {
+	risks := make([]*types.Risk, 0)
 	for _, id := range input.SortedTechnicalAssetIDs() {
 		technicalAsset := input.TechnicalAssets[id]
-		if technicalAsset.OutOfScope || technicalAsset.Technology == types.LoadBalancer ||
-			technicalAsset.Technology == types.ReverseProxy || technicalAsset.Technology == types.ServiceRegistry || technicalAsset.Technology == types.WAF || technicalAsset.Technology == types.IDS || technicalAsset.Technology == types.IPS {
+		if technicalAsset.OutOfScope || technicalAsset.Technologies.GetAttribute(types.NoAuthenticationRequired) {
 			continue
 		}
-		if technicalAsset.HighestConfidentiality(input) >= types.Confidential ||
-			technicalAsset.HighestIntegrity(input) >= types.Critical ||
-			technicalAsset.HighestAvailability(input) >= types.Critical ||
+
+		if technicalAsset.HighestProcessedConfidentiality(input) >= types.Confidential ||
+			technicalAsset.HighestProcessedIntegrity(input) >= types.Critical ||
+			technicalAsset.HighestProcessedAvailability(input) >= types.Critical ||
 			technicalAsset.MultiTenant {
 			// check each incoming data flow
 			commLinks := input.IncomingTechnicalCommunicationLinksMappedByTargetId[technicalAsset.Id]
 			for _, commLink := range commLinks {
 				caller := input.TechnicalAssets[commLink.SourceId]
-				if caller.Technology.IsUnprotectedCommunicationsTolerated() || caller.Type == types.Datastore {
+				if caller.Technologies.GetAttribute(types.IsUnprotectedCommunicationsTolerated) || caller.Type == types.Datastore {
 					continue
 				}
 				highRisk := commLink.HighestConfidentiality(input) == types.StrictlyConfidential ||
@@ -74,11 +74,11 @@ func (r *MissingAuthenticationRule) GenerateRisks(input *types.ParsedModel) []ty
 			}
 		}
 	}
-	return risks
+	return risks, nil
 }
 
-func (r *MissingAuthenticationRule) createRisk(input *types.ParsedModel, technicalAsset types.TechnicalAsset, incomingAccess, incomingAccessOrigin types.CommunicationLink, hopBetween string,
-	impact types.RiskExploitationImpact, likelihood types.RiskExploitationLikelihood, twoFactor bool, category types.RiskCategory) types.Risk {
+func (r *MissingAuthenticationRule) createRisk(input *types.Model, technicalAsset *types.TechnicalAsset, incomingAccess, incomingAccessOrigin *types.CommunicationLink, hopBetween string,
+	impact types.RiskExploitationImpact, likelihood types.RiskExploitationLikelihood, twoFactor bool, category *types.RiskCategory) *types.Risk {
 	factorString := ""
 	if twoFactor {
 		factorString = "Two-Factor "
@@ -86,8 +86,8 @@ func (r *MissingAuthenticationRule) createRisk(input *types.ParsedModel, technic
 	if len(hopBetween) > 0 {
 		hopBetween = "forwarded via <b>" + hopBetween + "</b> "
 	}
-	risk := types.Risk{
-		CategoryId:             r.Category().Id,
+	risk := &types.Risk{
+		CategoryId:             category.ID,
 		Severity:               types.CalculateSeverity(likelihood, impact),
 		ExploitationLikelihood: likelihood,
 		ExploitationImpact:     impact,

@@ -10,9 +10,9 @@ func NewSqlNoSqlInjectionRule() *SqlNoSqlInjectionRule {
 	return &SqlNoSqlInjectionRule{}
 }
 
-func (*SqlNoSqlInjectionRule) Category() types.RiskCategory {
-	return types.RiskCategory{
-		Id:    "sql-nosql-injection",
+func (*SqlNoSqlInjectionRule) Category() *types.RiskCategory {
+	return &types.RiskCategory{
+		ID:    "sql-nosql-injection",
 		Title: "SQL/NoSQL-Injection",
 		Description: "When a database is accessed via database access protocols SQL/NoSQL-Injection risks might arise. " +
 			"The risk rating depends on the sensitivity technical asset itself and of the data assets processed.",
@@ -38,8 +38,8 @@ func (*SqlNoSqlInjectionRule) SupportedTags() []string {
 	return []string{}
 }
 
-func (r *SqlNoSqlInjectionRule) GenerateRisks(input *types.ParsedModel) []types.Risk {
-	risks := make([]types.Risk, 0)
+func (r *SqlNoSqlInjectionRule) GenerateRisks(input *types.Model) ([]*types.Risk, error) {
+	risks := make([]*types.Risk, 0)
 	for _, id := range input.SortedTechnicalAssetIDs() {
 		technicalAsset := input.TechnicalAssets[id]
 		incomingFlows := input.IncomingTechnicalCommunicationLinksMappedByTargetId[technicalAsset.Id]
@@ -47,29 +47,29 @@ func (r *SqlNoSqlInjectionRule) GenerateRisks(input *types.ParsedModel) []types.
 			if input.TechnicalAssets[incomingFlow.SourceId].OutOfScope {
 				continue
 			}
-			if incomingFlow.Protocol.IsPotentialDatabaseAccessProtocol(true) && (technicalAsset.Technology == types.Database || technicalAsset.Technology == types.IdentityStoreDatabase) ||
-				(incomingFlow.Protocol.IsPotentialDatabaseAccessProtocol(false)) {
+			if incomingFlow.Protocol.IsPotentialDatabaseAccessProtocol(true) && technicalAsset.Technologies.GetAttribute(types.IsVulnerableToQueryInjection) ||
+				incomingFlow.Protocol.IsPotentialDatabaseAccessProtocol(false) {
 				risks = append(risks, r.createRisk(input, technicalAsset, incomingFlow))
 			}
 		}
 	}
-	return risks
+	return risks, nil
 }
 
-func (r *SqlNoSqlInjectionRule) createRisk(input *types.ParsedModel, technicalAsset types.TechnicalAsset, incomingFlow types.CommunicationLink) types.Risk {
+func (r *SqlNoSqlInjectionRule) createRisk(input *types.Model, technicalAsset *types.TechnicalAsset, incomingFlow *types.CommunicationLink) *types.Risk {
 	caller := input.TechnicalAssets[incomingFlow.SourceId]
 	title := "<b>SQL/NoSQL-Injection</b> risk at <b>" + caller.Title + "</b> against database <b>" + technicalAsset.Title + "</b>" +
 		" via <b>" + incomingFlow.Title + "</b>"
 	impact := types.MediumImpact
-	if technicalAsset.HighestConfidentiality(input) == types.StrictlyConfidential || technicalAsset.HighestIntegrity(input) == types.MissionCritical {
+	if technicalAsset.HighestProcessedConfidentiality(input) == types.StrictlyConfidential || technicalAsset.HighestProcessedIntegrity(input) == types.MissionCritical {
 		impact = types.HighImpact
 	}
 	likelihood := types.VeryLikely
 	if incomingFlow.Usage == types.DevOps {
 		likelihood = types.Likely
 	}
-	risk := types.Risk{
-		CategoryId:                      r.Category().Id,
+	risk := &types.Risk{
+		CategoryId:                      r.Category().ID,
 		Severity:                        types.CalculateSeverity(likelihood, impact),
 		ExploitationLikelihood:          likelihood,
 		ExploitationImpact:              impact,

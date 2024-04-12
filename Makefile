@@ -7,6 +7,7 @@ ASSETS			= 							\
 	support/openapi.yaml 					\
 	support/schema.json 					\
 	support/live-templates.txt				\
+	pkg/security/types/technologies.yaml	\
 	server
 BIN				= 							\
 	raa_calc 								\
@@ -23,7 +24,7 @@ RM		= rm -rf
 GOSEC	= /opt/homebrew/bin/gosec
 
 # Targets
-.phony: all prep run_tests clean tidy install uninstall gosec
+.phony: all prep run_tests clean tidy install uninstall gosec gv
 
 default: all
 
@@ -59,6 +60,11 @@ uninstall:
 
 gosec:
 	$(GOSEC) ./...
+
+gv: out/tmp/diagram.png
+
+out/tmp/diagram.png: out/tmp/diagram.gv
+	dot -Tpng $< -o $@
 
 bin/raa_calc: cmd/raa/main.go
 	$(GO) build $(GOFLAGS) -o $@ $<

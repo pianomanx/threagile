@@ -10,33 +10,33 @@ import (
 )
 
 type TechnicalAsset struct {
-	Id                      string                   `json:"id,omitempty" yaml:"id,omitempty"`
-	Title                   string                   `json:"title,omitempty" yaml:"title,omitempty"`
-	Description             string                   `json:"description,omitempty" yaml:"description,omitempty"`
-	Usage                   Usage                    `json:"usage,omitempty" yaml:"usage,omitempty"`
-	Type                    TechnicalAssetType       `json:"type,omitempty" yaml:"type,omitempty"`
-	Size                    TechnicalAssetSize       `json:"size,omitempty" yaml:"size,omitempty"`
-	Technology              TechnicalAssetTechnology `json:"technology,omitempty" yaml:"technology,omitempty"`
-	Machine                 TechnicalAssetMachine    `json:"machine,omitempty" yaml:"machine,omitempty"`
-	Internet                bool                     `json:"internet,omitempty" yaml:"internet,omitempty"`
-	MultiTenant             bool                     `json:"multi_tenant,omitempty" yaml:"multi_tenant,omitempty"`
-	Redundant               bool                     `json:"redundant,omitempty" yaml:"redundant,omitempty"`
-	CustomDevelopedParts    bool                     `json:"custom_developed_parts,omitempty" yaml:"custom_developed_parts,omitempty"`
-	OutOfScope              bool                     `json:"out_of_scope,omitempty" yaml:"out_of_scope,omitempty"`
-	UsedAsClientByHuman     bool                     `json:"used_as_client_by_human,omitempty" yaml:"used_as_client_by_human,omitempty"`
-	Encryption              EncryptionStyle          `json:"encryption,omitempty" yaml:"encryption,omitempty"`
-	JustificationOutOfScope string                   `json:"justification_out_of_scope,omitempty" yaml:"justification_out_of_scope,omitempty"`
-	Owner                   string                   `json:"owner,omitempty" yaml:"owner,omitempty"`
-	Confidentiality         Confidentiality          `json:"confidentiality,omitempty" yaml:"confidentiality,omitempty"`
-	Integrity               Criticality              `json:"integrity,omitempty" yaml:"integrity,omitempty"`
-	Availability            Criticality              `json:"availability,omitempty" yaml:"availability,omitempty"`
-	JustificationCiaRating  string                   `json:"justification_cia_rating,omitempty" yaml:"justification_cia_rating,omitempty"`
-	Tags                    []string                 `json:"tags,omitempty" yaml:"tags,omitempty"`
-	DataAssetsProcessed     []string                 `json:"data_assets_processed,omitempty" yaml:"data_assets_processed,omitempty"`
-	DataAssetsStored        []string                 `json:"data_assets_stored,omitempty" yaml:"data_assets_stored,omitempty"`
-	DataFormatsAccepted     []DataFormat             `json:"data_formats_accepted,omitempty" yaml:"data_formats_accepted,omitempty"`
-	CommunicationLinks      []CommunicationLink      `json:"communication_links,omitempty" yaml:"communication_links,omitempty"`
-	DiagramTweakOrder       int                      `json:"diagram_tweak_order,omitempty" yaml:"diagram_tweak_order,omitempty"`
+	Id                      string                `json:"id,omitempty" yaml:"id,omitempty"`
+	Title                   string                `json:"title,omitempty" yaml:"title,omitempty"`
+	Description             string                `json:"description,omitempty" yaml:"description,omitempty"`
+	Usage                   Usage                 `json:"usage,omitempty" yaml:"usage,omitempty"`
+	Type                    TechnicalAssetType    `json:"type,omitempty" yaml:"type,omitempty"`
+	Size                    TechnicalAssetSize    `json:"size,omitempty" yaml:"size,omitempty"`
+	Technologies            TechnologyList        `json:"technologies,omitempty" yaml:"technologies,omitempty"`
+	Machine                 TechnicalAssetMachine `json:"machine,omitempty" yaml:"machine,omitempty"`
+	Internet                bool                  `json:"internet,omitempty" yaml:"internet,omitempty"`
+	MultiTenant             bool                  `json:"multi_tenant,omitempty" yaml:"multi_tenant,omitempty"`
+	Redundant               bool                  `json:"redundant,omitempty" yaml:"redundant,omitempty"`
+	CustomDevelopedParts    bool                  `json:"custom_developed_parts,omitempty" yaml:"custom_developed_parts,omitempty"`
+	OutOfScope              bool                  `json:"out_of_scope,omitempty" yaml:"out_of_scope,omitempty"`
+	UsedAsClientByHuman     bool                  `json:"used_as_client_by_human,omitempty" yaml:"used_as_client_by_human,omitempty"`
+	Encryption              EncryptionStyle       `json:"encryption,omitempty" yaml:"encryption,omitempty"`
+	JustificationOutOfScope string                `json:"justification_out_of_scope,omitempty" yaml:"justification_out_of_scope,omitempty"`
+	Owner                   string                `json:"owner,omitempty" yaml:"owner,omitempty"`
+	Confidentiality         Confidentiality       `json:"confidentiality,omitempty" yaml:"confidentiality,omitempty"`
+	Integrity               Criticality           `json:"integrity,omitempty" yaml:"integrity,omitempty"`
+	Availability            Criticality           `json:"availability,omitempty" yaml:"availability,omitempty"`
+	JustificationCiaRating  string                `json:"justification_cia_rating,omitempty" yaml:"justification_cia_rating,omitempty"`
+	Tags                    []string              `json:"tags,omitempty" yaml:"tags,omitempty"`
+	DataAssetsProcessed     []string              `json:"data_assets_processed,omitempty" yaml:"data_assets_processed,omitempty"`
+	DataAssetsStored        []string              `json:"data_assets_stored,omitempty" yaml:"data_assets_stored,omitempty"`
+	DataFormatsAccepted     []DataFormat          `json:"data_formats_accepted,omitempty" yaml:"data_formats_accepted,omitempty"`
+	CommunicationLinks      []*CommunicationLink  `json:"communication_links,omitempty" yaml:"communication_links,omitempty"`
+	DiagramTweakOrder       int                   `json:"diagram_tweak_order,omitempty" yaml:"diagram_tweak_order,omitempty"`
 	// will be set by separate calculation step:
 	RAA float64 `json:"raa,omitempty" yaml:"raa,omitempty"`
 }
@@ -51,7 +51,7 @@ func (what TechnicalAsset) IsTaggedWithBaseTag(baseTag string) bool {
 
 // first use the tag(s) of the asset itself, then their trust boundaries (recursively up) and then their shared runtime
 
-func (what TechnicalAsset) IsTaggedWithAnyTraversingUp(model *ParsedModel, tags ...string) bool {
+func (what TechnicalAsset) IsTaggedWithAnyTraversingUp(model *Model, tags ...string) bool {
 	if containsCaseInsensitiveAny(what.Tags, tags...) {
 		return true
 	}
@@ -69,29 +69,50 @@ func (what TechnicalAsset) IsTaggedWithAnyTraversingUp(model *ParsedModel, tags 
 	return false
 }
 
-func (what TechnicalAsset) IsSameTrustBoundary(parsedModel *ParsedModel, otherAssetId string) bool {
-	trustBoundaryOfMyAsset := parsedModel.DirectContainingTrustBoundaryMappedByTechnicalAssetId[what.Id]
-	trustBoundaryOfOtherAsset := parsedModel.DirectContainingTrustBoundaryMappedByTechnicalAssetId[otherAssetId]
+func (what TechnicalAsset) IsSameTrustBoundary(parsedModel *Model, otherAssetId string) bool {
+	trustBoundaryOfMyAsset, trustBoundaryOfMyAssetOk := parsedModel.DirectContainingTrustBoundaryMappedByTechnicalAssetId[what.Id]
+	trustBoundaryOfOtherAsset, trustBoundaryOfOtherAssetOk := parsedModel.DirectContainingTrustBoundaryMappedByTechnicalAssetId[otherAssetId]
+	if trustBoundaryOfMyAssetOk != trustBoundaryOfOtherAssetOk {
+		return false
+	}
+	if !trustBoundaryOfMyAssetOk && !trustBoundaryOfOtherAssetOk {
+		return true
+	}
 	return trustBoundaryOfMyAsset.Id == trustBoundaryOfOtherAsset.Id
 }
 
-func (what TechnicalAsset) IsSameExecutionEnvironment(parsedModel *ParsedModel, otherAssetId string) bool {
-	trustBoundaryOfMyAsset := parsedModel.DirectContainingTrustBoundaryMappedByTechnicalAssetId[what.Id]
-	trustBoundaryOfOtherAsset := parsedModel.DirectContainingTrustBoundaryMappedByTechnicalAssetId[otherAssetId]
+func (what TechnicalAsset) IsSameExecutionEnvironment(parsedModel *Model, otherAssetId string) bool {
+	trustBoundaryOfMyAsset, trustBoundaryOfMyAssetOk := parsedModel.DirectContainingTrustBoundaryMappedByTechnicalAssetId[what.Id]
+	trustBoundaryOfOtherAsset, trustBoundaryOfOtherAssetOk := parsedModel.DirectContainingTrustBoundaryMappedByTechnicalAssetId[otherAssetId]
+	if trustBoundaryOfMyAssetOk != trustBoundaryOfOtherAssetOk {
+		return false
+	}
+	if !trustBoundaryOfMyAssetOk && !trustBoundaryOfOtherAssetOk {
+		return true
+	}
 	if trustBoundaryOfMyAsset.Type == ExecutionEnvironment && trustBoundaryOfOtherAsset.Type == ExecutionEnvironment {
 		return trustBoundaryOfMyAsset.Id == trustBoundaryOfOtherAsset.Id
 	}
 	return false
 }
 
-func (what TechnicalAsset) IsSameTrustBoundaryNetworkOnly(parsedModel *ParsedModel, otherAssetId string) bool {
-	trustBoundaryOfMyAsset := parsedModel.DirectContainingTrustBoundaryMappedByTechnicalAssetId[what.Id]
-	if !trustBoundaryOfMyAsset.Type.IsNetworkBoundary() { // find and use the parent boundary then
-		trustBoundaryOfMyAsset = parsedModel.TrustBoundaries[trustBoundaryOfMyAsset.ParentTrustBoundaryID(parsedModel)]
+func (what TechnicalAsset) IsSameTrustBoundaryNetworkOnly(parsedModel *Model, otherAssetId string) bool {
+	trustBoundaryOfMyAsset, trustBoundaryOfMyAssetOk := parsedModel.DirectContainingTrustBoundaryMappedByTechnicalAssetId[what.Id]
+	if trustBoundaryOfMyAsset != nil && !trustBoundaryOfMyAsset.Type.IsNetworkBoundary() { // find and use the parent boundary then
+		trustBoundaryOfMyAsset, trustBoundaryOfMyAssetOk = parsedModel.TrustBoundaries[trustBoundaryOfMyAsset.ParentTrustBoundaryID(parsedModel)]
 	}
-	trustBoundaryOfOtherAsset := parsedModel.DirectContainingTrustBoundaryMappedByTechnicalAssetId[otherAssetId]
-	if !trustBoundaryOfOtherAsset.Type.IsNetworkBoundary() { // find and use the parent boundary then
-		trustBoundaryOfOtherAsset = parsedModel.TrustBoundaries[trustBoundaryOfOtherAsset.ParentTrustBoundaryID(parsedModel)]
+	trustBoundaryOfOtherAsset, trustBoundaryOfOtherAssetOk := parsedModel.DirectContainingTrustBoundaryMappedByTechnicalAssetId[otherAssetId]
+	if trustBoundaryOfOtherAsset != nil && !trustBoundaryOfOtherAsset.Type.IsNetworkBoundary() { // find and use the parent boundary then
+		trustBoundaryOfOtherAsset, trustBoundaryOfOtherAssetOk = parsedModel.TrustBoundaries[trustBoundaryOfOtherAsset.ParentTrustBoundaryID(parsedModel)]
+	}
+	if trustBoundaryOfMyAssetOk != trustBoundaryOfOtherAssetOk {
+		return false
+	}
+	if !trustBoundaryOfMyAssetOk && !trustBoundaryOfOtherAssetOk {
+		return true
+	}
+	if trustBoundaryOfMyAsset == nil || trustBoundaryOfOtherAsset == nil {
+		return trustBoundaryOfMyAsset == trustBoundaryOfOtherAsset
 	}
 	return trustBoundaryOfMyAsset.Id == trustBoundaryOfOtherAsset.Id
 }
@@ -102,7 +123,22 @@ func (what TechnicalAsset) HighestSensitivityScore() float64 {
 		what.Availability.AttackerAttractivenessForAsset()
 }
 
-func (what TechnicalAsset) HighestConfidentiality(parsedModel *ParsedModel) Confidentiality {
+func (what TechnicalAsset) HighestConfidentiality(model *Model) Confidentiality {
+	highest := what.Confidentiality
+	highestProcessed := what.HighestProcessedConfidentiality(model)
+	if highest < highestProcessed {
+		highest = highestProcessed
+	}
+
+	highestStored := what.HighestStoredConfidentiality(model)
+	if highest < highestStored {
+		highest = highestStored
+	}
+
+	return highest
+}
+
+func (what TechnicalAsset) HighestProcessedConfidentiality(parsedModel *Model) Confidentiality {
 	highest := what.Confidentiality
 	for _, dataId := range what.DataAssetsProcessed {
 		dataAsset := parsedModel.DataAssets[dataId]
@@ -113,8 +149,19 @@ func (what TechnicalAsset) HighestConfidentiality(parsedModel *ParsedModel) Conf
 	return highest
 }
 
-func (what TechnicalAsset) DataAssetsProcessedSorted(parsedModel *ParsedModel) []DataAsset {
-	result := make([]DataAsset, 0)
+func (what TechnicalAsset) HighestStoredConfidentiality(parsedModel *Model) Confidentiality {
+	highest := what.Confidentiality
+	for _, dataId := range what.DataAssetsStored {
+		dataAsset := parsedModel.DataAssets[dataId]
+		if dataAsset.Confidentiality > highest {
+			highest = dataAsset.Confidentiality
+		}
+	}
+	return highest
+}
+
+func (what TechnicalAsset) DataAssetsProcessedSorted(parsedModel *Model) []*DataAsset {
+	result := make([]*DataAsset, 0)
 	for _, assetID := range what.DataAssetsProcessed {
 		result = append(result, parsedModel.DataAssets[assetID])
 	}
@@ -122,8 +169,8 @@ func (what TechnicalAsset) DataAssetsProcessedSorted(parsedModel *ParsedModel) [
 	return result
 }
 
-func (what TechnicalAsset) DataAssetsStoredSorted(parsedModel *ParsedModel) []DataAsset {
-	result := make([]DataAsset, 0)
+func (what TechnicalAsset) DataAssetsStoredSorted(parsedModel *Model) []*DataAsset {
+	result := make([]*DataAsset, 0)
 	for _, assetID := range what.DataAssetsStored {
 		result = append(result, parsedModel.DataAssets[assetID])
 	}
@@ -138,14 +185,29 @@ func (what TechnicalAsset) DataFormatsAcceptedSorted() []DataFormat {
 	return result
 }
 
-func (what TechnicalAsset) CommunicationLinksSorted() []CommunicationLink {
-	result := make([]CommunicationLink, 0)
+func (what TechnicalAsset) CommunicationLinksSorted() []*CommunicationLink {
+	result := make([]*CommunicationLink, 0)
 	result = append(result, what.CommunicationLinks...)
 	sort.Sort(ByTechnicalCommunicationLinkTitleSort(result))
 	return result
 }
 
-func (what TechnicalAsset) HighestIntegrity(model *ParsedModel) Criticality {
+func (what TechnicalAsset) HighestIntegrity(model *Model) Criticality {
+	highest := what.Integrity
+	highestProcessed := what.HighestProcessedIntegrity(model)
+	if highest < highestProcessed {
+		highest = highestProcessed
+	}
+
+	highestStored := what.HighestStoredIntegrity(model)
+	if highest < highestStored {
+		highest = highestStored
+	}
+
+	return highest
+}
+
+func (what TechnicalAsset) HighestProcessedIntegrity(model *Model) Criticality {
 	highest := what.Integrity
 	for _, dataId := range what.DataAssetsProcessed {
 		dataAsset := model.DataAssets[dataId]
@@ -156,7 +218,33 @@ func (what TechnicalAsset) HighestIntegrity(model *ParsedModel) Criticality {
 	return highest
 }
 
-func (what TechnicalAsset) HighestAvailability(model *ParsedModel) Criticality {
+func (what TechnicalAsset) HighestStoredIntegrity(model *Model) Criticality {
+	highest := what.Integrity
+	for _, dataId := range what.DataAssetsStored {
+		dataAsset := model.DataAssets[dataId]
+		if dataAsset.Integrity > highest {
+			highest = dataAsset.Integrity
+		}
+	}
+	return highest
+}
+
+func (what TechnicalAsset) HighestAvailability(model *Model) Criticality {
+	highest := what.Availability
+	highestProcessed := what.HighestProcessedAvailability(model)
+	if highest < highestProcessed {
+		highest = highestProcessed
+	}
+
+	highestStored := what.HighestStoredAvailability(model)
+	if highest < highestStored {
+		highest = highestStored
+	}
+
+	return highest
+}
+
+func (what TechnicalAsset) HighestProcessedAvailability(model *Model) Criticality {
 	highest := what.Availability
 	for _, dataId := range what.DataAssetsProcessed {
 		dataAsset := model.DataAssets[dataId]
@@ -167,7 +255,18 @@ func (what TechnicalAsset) HighestAvailability(model *ParsedModel) Criticality {
 	return highest
 }
 
-func (what TechnicalAsset) HasDirectConnection(parsedModel *ParsedModel, otherAssetId string) bool {
+func (what TechnicalAsset) HighestStoredAvailability(model *Model) Criticality {
+	highest := what.Availability
+	for _, dataId := range what.DataAssetsStored {
+		dataAsset := model.DataAssets[dataId]
+		if dataAsset.Availability > highest {
+			highest = dataAsset.Availability
+		}
+	}
+	return highest
+}
+
+func (what TechnicalAsset) HasDirectConnection(parsedModel *Model, otherAssetId string) bool {
 	for _, dataFlow := range parsedModel.IncomingTechnicalCommunicationLinksMappedByTargetId[what.Id] {
 		if dataFlow.SourceId == otherAssetId {
 			return true
@@ -182,8 +281,8 @@ func (what TechnicalAsset) HasDirectConnection(parsedModel *ParsedModel, otherAs
 	return false
 }
 
-func (what TechnicalAsset) GeneratedRisks(parsedModel *ParsedModel) []Risk {
-	resultingRisks := make([]Risk, 0)
+func (what TechnicalAsset) GeneratedRisks(parsedModel *Model) []*Risk {
+	resultingRisks := make([]*Risk, 0)
 	if len(SortedRiskCategories(parsedModel)) == 0 {
 		fmt.Println("Uh, strange, no risks generated (yet?) and asking for them by tech asset...")
 	}
@@ -210,10 +309,6 @@ func (what TechnicalAsset) HighestRiskSeverity() RiskSeverity {
 	return highest
 }
 */
-
-func (what TechnicalAsset) IsZero() bool {
-	return len(what.Id) == 0
-}
 
 func (what TechnicalAsset) ProcessesOrStoresDataAsset(dataAssetId string) bool {
 	return contains(what.DataAssetsProcessed, dataAssetId)
@@ -260,7 +355,7 @@ func (what TechnicalAsset) QuickWins() float64 {
 }
 */
 
-func (what TechnicalAsset) GetTrustBoundaryId(model *ParsedModel) string {
+func (what TechnicalAsset) GetTrustBoundaryId(model *Model) string {
 	for _, trustBoundary := range model.TrustBoundaries {
 		for _, techAssetInside := range trustBoundary.TechnicalAssetsInside {
 			if techAssetInside == what.Id {
@@ -271,7 +366,7 @@ func (what TechnicalAsset) GetTrustBoundaryId(model *ParsedModel) string {
 	return ""
 }
 
-func SortByTechnicalAssetRiskSeverityAndTitleStillAtRisk(assets []TechnicalAsset, parsedModel *ParsedModel) {
+func SortByTechnicalAssetRiskSeverityAndTitleStillAtRisk(assets []*TechnicalAsset, parsedModel *Model) {
 	sort.Slice(assets, func(i, j int) bool {
 		risksLeft := ReduceToOnlyStillAtRisk(parsedModel, assets[i].GeneratedRisks(parsedModel))
 		risksRight := ReduceToOnlyStillAtRisk(parsedModel, assets[j].GeneratedRisks(parsedModel))
@@ -300,7 +395,7 @@ func SortByTechnicalAssetRiskSeverityAndTitleStillAtRisk(assets []TechnicalAsset
 	})
 }
 
-type ByTechnicalAssetRAAAndTitleSort []TechnicalAsset
+type ByTechnicalAssetRAAAndTitleSort []*TechnicalAsset
 
 func (what ByTechnicalAssetRAAAndTitleSort) Len() int      { return len(what) }
 func (what ByTechnicalAssetRAAAndTitleSort) Swap(i, j int) { what[i], what[j] = what[j], what[i] }
@@ -328,7 +423,7 @@ func (what ByTechnicalAssetQuickWinsAndTitleSort) Less(i, j int) bool {
 }
 */
 
-type ByTechnicalAssetTitleSort []TechnicalAsset
+type ByTechnicalAssetTitleSort []*TechnicalAsset
 
 func (what ByTechnicalAssetTitleSort) Len() int      { return len(what) }
 func (what ByTechnicalAssetTitleSort) Swap(i, j int) { what[i], what[j] = what[j], what[i] }
@@ -336,7 +431,7 @@ func (what ByTechnicalAssetTitleSort) Less(i, j int) bool {
 	return what[i].Title < what[j].Title
 }
 
-type ByOrderAndIdSort []TechnicalAsset
+type ByOrderAndIdSort []*TechnicalAsset
 
 func (what ByOrderAndIdSort) Len() int      { return len(what) }
 func (what ByOrderAndIdSort) Swap(i, j int) { what[i], what[j] = what[j], what[i] }

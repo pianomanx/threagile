@@ -6,7 +6,6 @@ package types
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"gopkg.in/yaml.v3"
 	"strings"
@@ -35,17 +34,7 @@ var DataBreachProbabilityTypeDescription = [...]TypeDescription{
 }
 
 func ParseDataBreachProbability(value string) (dataBreachProbability DataBreachProbability, err error) {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return Possible, err
-	}
-
-	for _, candidate := range DataBreachProbabilityValues() {
-		if candidate.String() == value {
-			return candidate.(DataBreachProbability), err
-		}
-	}
-	return dataBreachProbability, errors.New("Unable to parse into type: " + value)
+	return DataBreachProbability(0).Find(value)
 }
 
 func (what DataBreachProbability) String() string {
@@ -61,6 +50,20 @@ func (what DataBreachProbability) Title() string {
 	return [...]string{"Improbable", "Possible", "Probable"}[what]
 }
 
+func (what DataBreachProbability) Find(value string) (DataBreachProbability, error) {
+	if len(value) == 0 {
+		return Possible, nil
+	}
+
+	for index, description := range DataBreachProbabilityTypeDescription {
+		if strings.EqualFold(value, description.Name) {
+			return DataBreachProbability(index), nil
+		}
+	}
+
+	return DataBreachProbability(0), fmt.Errorf("unknown data breach probability value %q", value)
+}
+
 func (what DataBreachProbability) MarshalJSON() ([]byte, error) {
 	return json.Marshal(what.String())
 }
@@ -72,7 +75,7 @@ func (what *DataBreachProbability) UnmarshalJSON(data []byte) error {
 		return unmarshalError
 	}
 
-	value, findError := what.find(text)
+	value, findError := what.Find(text)
 	if findError != nil {
 		return findError
 	}
@@ -86,21 +89,11 @@ func (what DataBreachProbability) MarshalYAML() (interface{}, error) {
 }
 
 func (what *DataBreachProbability) UnmarshalYAML(node *yaml.Node) error {
-	value, findError := what.find(node.Value)
+	value, findError := what.Find(node.Value)
 	if findError != nil {
 		return findError
 	}
 
 	*what = value
 	return nil
-}
-
-func (what DataBreachProbability) find(value string) (DataBreachProbability, error) {
-	for index, description := range DataBreachProbabilityTypeDescription {
-		if strings.EqualFold(value, description.Name) {
-			return DataBreachProbability(index), nil
-		}
-	}
-
-	return DataBreachProbability(0), fmt.Errorf("unknown data breach probability value %q", value)
 }

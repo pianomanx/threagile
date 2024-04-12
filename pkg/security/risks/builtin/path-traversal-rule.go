@@ -10,9 +10,9 @@ func NewPathTraversalRule() *PathTraversalRule {
 	return &PathTraversalRule{}
 }
 
-func (*PathTraversalRule) Category() types.RiskCategory {
-	return types.RiskCategory{
-		Id:    "path-traversal",
+func (*PathTraversalRule) Category() *types.RiskCategory {
+	return &types.RiskCategory{
+		ID:    "path-traversal",
 		Title: "Path-Traversal",
 		Description: "When a filesystem is accessed Path-Traversal or Local-File-Inclusion (LFI) risks might arise. " +
 			"The risk rating depends on the sensitivity of the technical asset itself and of the data assets processed.",
@@ -41,11 +41,11 @@ func (*PathTraversalRule) SupportedTags() []string {
 	return []string{}
 }
 
-func (r *PathTraversalRule) GenerateRisks(input *types.ParsedModel) []types.Risk {
-	risks := make([]types.Risk, 0)
+func (r *PathTraversalRule) GenerateRisks(input *types.Model) ([]*types.Risk, error) {
+	risks := make([]*types.Risk, 0)
 	for _, id := range input.SortedTechnicalAssetIDs() {
 		technicalAsset := input.TechnicalAssets[id]
-		if technicalAsset.Technology != types.FileServer && technicalAsset.Technology != types.LocalFileSystem {
+		if !technicalAsset.Technologies.GetAttribute(types.IsFileStorage) {
 			continue
 		}
 		incomingFlows := input.IncomingTechnicalCommunicationLinksMappedByTargetId[technicalAsset.Id]
@@ -60,19 +60,19 @@ func (r *PathTraversalRule) GenerateRisks(input *types.ParsedModel) []types.Risk
 			risks = append(risks, r.createRisk(input, technicalAsset, incomingFlow, likelihood))
 		}
 	}
-	return risks
+	return risks, nil
 }
 
-func (r *PathTraversalRule) createRisk(input *types.ParsedModel, technicalAsset types.TechnicalAsset, incomingFlow types.CommunicationLink, likelihood types.RiskExploitationLikelihood) types.Risk {
+func (r *PathTraversalRule) createRisk(input *types.Model, technicalAsset *types.TechnicalAsset, incomingFlow *types.CommunicationLink, likelihood types.RiskExploitationLikelihood) *types.Risk {
 	caller := input.TechnicalAssets[incomingFlow.SourceId]
 	title := "<b>Path-Traversal</b> risk at <b>" + caller.Title + "</b> against filesystem <b>" + technicalAsset.Title + "</b>" +
 		" via <b>" + incomingFlow.Title + "</b>"
 	impact := types.MediumImpact
-	if technicalAsset.HighestConfidentiality(input) == types.StrictlyConfidential || technicalAsset.HighestIntegrity(input) == types.MissionCritical {
+	if technicalAsset.HighestProcessedConfidentiality(input) == types.StrictlyConfidential || technicalAsset.HighestProcessedIntegrity(input) == types.MissionCritical {
 		impact = types.HighImpact
 	}
-	risk := types.Risk{
-		CategoryId:                      r.Category().Id,
+	risk := &types.Risk{
+		CategoryId:                      r.Category().ID,
 		Severity:                        types.CalculateSeverity(likelihood, impact),
 		ExploitationLikelihood:          likelihood,
 		ExploitationImpact:              impact,

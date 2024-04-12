@@ -10,9 +10,9 @@ func NewUnencryptedCommunicationRule() *UnencryptedCommunicationRule {
 	return &UnencryptedCommunicationRule{}
 }
 
-func (*UnencryptedCommunicationRule) Category() types.RiskCategory {
-	return types.RiskCategory{
-		Id:    "unencrypted-communication",
+func (*UnencryptedCommunicationRule) Category() *types.RiskCategory {
+	return &types.RiskCategory{
+		ID:    "unencrypted-communication",
 		Title: "Unencrypted Communication",
 		Description: "Due to the confidentiality and/or integrity rating of the data assets transferred over the " +
 			"communication link this connection must be encrypted.",
@@ -24,7 +24,7 @@ func (*UnencryptedCommunicationRule) Category() types.RiskCategory {
 		Check:      "Are recommendations from the linked cheat sheet and referenced ASVS chapter applied?",
 		Function:   types.Operations,
 		STRIDE:     types.InformationDisclosure,
-		DetectionLogic: "Unencrypted technical communication links of in-scope technical assets (excluding " + types.Monitoring.String() + " traffic as well as " + types.LocalFileAccess.String() + " and " + types.InProcessLibraryCall.String() + ") " +
+		DetectionLogic: "Unencrypted technical communication links of in-scope technical assets (excluding " + types.Monitoring + " traffic as well as " + types.LocalFileAccess.String() + " and " + types.InProcessLibraryCall.String() + ") " +
 			"transferring sensitive data.", // TODO more detailed text required here
 		RiskAssessment: "Depending on the confidentiality rating of the transferred data-assets either medium or high risk.",
 		FalsePositives: "When all sensitive data sent over the communication link is already fully encrypted on document or data level. " +
@@ -40,8 +40,8 @@ func (*UnencryptedCommunicationRule) SupportedTags() []string {
 
 // check for communication links that should be encrypted due to their confidentiality and/or integrity
 
-func (r *UnencryptedCommunicationRule) GenerateRisks(input *types.ParsedModel) []types.Risk {
-	risks := make([]types.Risk, 0)
+func (r *UnencryptedCommunicationRule) GenerateRisks(input *types.Model) ([]*types.Risk, error) {
+	risks := make([]*types.Risk, 0)
 	for _, technicalAsset := range input.TechnicalAssets {
 		for _, dataFlow := range technicalAsset.CommunicationLinks {
 			transferringAuthData := dataFlow.Authentication != types.NoneAuthentication
@@ -49,8 +49,8 @@ func (r *UnencryptedCommunicationRule) GenerateRisks(input *types.ParsedModel) [
 			targetAsset := input.TechnicalAssets[dataFlow.TargetId]
 			if !technicalAsset.OutOfScope || !sourceAsset.OutOfScope {
 				if !dataFlow.Protocol.IsEncrypted() && !dataFlow.Protocol.IsProcessLocal() &&
-					!sourceAsset.Technology.IsUnprotectedCommunicationsTolerated() &&
-					!targetAsset.Technology.IsUnprotectedCommunicationsTolerated() {
+					!sourceAsset.Technologies.GetAttribute(types.IsUnprotectedCommunicationsTolerated) &&
+					!targetAsset.Technologies.GetAttribute(types.IsUnprotectedCommunicationsTolerated) {
 					addedOne := false
 					for _, sentDataAsset := range dataFlow.DataAssetsSent {
 						dataAsset := input.DataAssets[sentDataAsset]
@@ -80,10 +80,10 @@ func (r *UnencryptedCommunicationRule) GenerateRisks(input *types.ParsedModel) [
 			}
 		}
 	}
-	return risks
+	return risks, nil
 }
 
-func (r *UnencryptedCommunicationRule) createRisk(input *types.ParsedModel, technicalAsset types.TechnicalAsset, dataFlow types.CommunicationLink, highRisk bool, transferringAuthData bool) types.Risk {
+func (r *UnencryptedCommunicationRule) createRisk(input *types.Model, technicalAsset *types.TechnicalAsset, dataFlow *types.CommunicationLink, highRisk bool, transferringAuthData bool) *types.Risk {
 	impact := types.MediumImpact
 	if highRisk {
 		impact = types.HighImpact
@@ -101,8 +101,8 @@ func (r *UnencryptedCommunicationRule) createRisk(input *types.ParsedModel, tech
 	if dataFlow.IsAcrossTrustBoundaryNetworkOnly(input) {
 		likelihood = types.Likely
 	}
-	risk := types.Risk{
-		CategoryId:                      r.Category().Id,
+	risk := &types.Risk{
+		CategoryId:                      r.Category().ID,
 		Severity:                        types.CalculateSeverity(likelihood, impact),
 		ExploitationLikelihood:          likelihood,
 		ExploitationImpact:              impact,
@@ -116,10 +116,10 @@ func (r *UnencryptedCommunicationRule) createRisk(input *types.ParsedModel, tech
 	return risk
 }
 
-func isHighSensitivity(dataAsset types.DataAsset) bool {
+func isHighSensitivity(dataAsset *types.DataAsset) bool {
 	return dataAsset.Confidentiality == types.StrictlyConfidential || dataAsset.Integrity == types.MissionCritical
 }
 
-func isMediumSensitivity(dataAsset types.DataAsset) bool {
+func isMediumSensitivity(dataAsset *types.DataAsset) bool {
 	return dataAsset.Confidentiality == types.Confidential || dataAsset.Integrity == types.Critical
 }

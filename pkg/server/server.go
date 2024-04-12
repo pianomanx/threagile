@@ -35,7 +35,7 @@ type server struct {
 	mapFolderNameToTokenHash       map[string]string
 	extremeShortTimeoutsForTesting bool
 	locksByFolderName              map[string]*sync.Mutex
-	customRiskRules                map[string]*model.CustomRisk
+	customRiskRules                risks.RiskRules
 }
 
 func RunServer(config *common.Config) {
@@ -102,7 +102,7 @@ func RunServer(config *common.Config) {
 			"encryption":                   arrayOfStringValues(types.EncryptionStyleValues()),
 			"data_format":                  arrayOfStringValues(types.DataFormatValues()),
 			"protocol":                     arrayOfStringValues(types.ProtocolValues()),
-			"technical_asset_technology":   arrayOfStringValues(types.TechnicalAssetTechnologyValues()),
+			"technical_asset_technology":   arrayOfStringValues(types.TechnicalAssetTechnologyValues(config)),
 			"technical_asset_machine":      arrayOfStringValues(types.TechnicalAssetMachineValues()),
 			"trust_boundary_type":          arrayOfStringValues(types.TrustBoundaryTypeValues()),
 			"data_breach_probability":      arrayOfStringValues(types.DataBreachProbabilityValues()),
@@ -204,7 +204,7 @@ func (s *server) addSupportedTags(input []byte) []byte {
 	// add distinct tags as "tags_available"
 	supportedTags := make(map[string]bool)
 	for _, customRule := range s.customRiskRules {
-		for _, tag := range customRule.Tags {
+		for _, tag := range customRule.SupportedTags() {
 			supportedTags[strings.ToLower(tag)] = true
 		}
 	}

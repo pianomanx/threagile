@@ -9,7 +9,7 @@ import (
 	"github.com/threagile/threagile/pkg/security/types"
 )
 
-type addVaultMacro struct {
+type AddVaultMacro struct {
 	macroState             map[string][]string
 	questionsAnswered      []string
 	withinTrustBoundary    bool
@@ -33,14 +33,14 @@ var authenticationTypes = []string{
 	"Credentials (username/password, API-key, secret token, etc.)",
 }
 
-func NewAddVault() *addVaultMacro {
-	return &addVaultMacro{
+func NewAddVault() *AddVaultMacro {
+	return &AddVaultMacro{
 		macroState:        make(map[string][]string),
 		questionsAnswered: make([]string, 0),
 	}
 }
 
-func (m *addVaultMacro) GetMacroDetails() MacroDetails {
+func (m *AddVaultMacro) GetMacroDetails() MacroDetails {
 	return MacroDetails{
 		ID:          "add-vault",
 		Title:       "Add Vault",
@@ -48,7 +48,7 @@ func (m *addVaultMacro) GetMacroDetails() MacroDetails {
 	}
 }
 
-func (m *addVaultMacro) GetNextQuestion(parsedModel *types.ParsedModel) (nextQuestion MacroQuestion, err error) {
+func (m *AddVaultMacro) GetNextQuestion(parsedModel *types.Model) (nextQuestion MacroQuestion, err error) {
 	counter := len(m.questionsAnswered)
 	if counter > 5 && !m.withinTrustBoundary {
 		counter++
@@ -152,7 +152,7 @@ func (m *addVaultMacro) GetNextQuestion(parsedModel *types.ParsedModel) (nextQue
 	return NoMoreQuestions(), nil
 }
 
-func (m *addVaultMacro) ApplyAnswer(questionID string, answer ...string) (message string, validResult bool, err error) {
+func (m *AddVaultMacro) ApplyAnswer(questionID string, answer ...string) (message string, validResult bool, err error) {
 	m.macroState[questionID] = answer
 	m.questionsAnswered = append(m.questionsAnswered, questionID)
 	if questionID == "within-trust-boundary" {
@@ -163,7 +163,7 @@ func (m *addVaultMacro) ApplyAnswer(questionID string, answer ...string) (messag
 	return "Answer processed", true, nil
 }
 
-func (m *addVaultMacro) GoBack() (message string, validResult bool, err error) {
+func (m *AddVaultMacro) GoBack() (message string, validResult bool, err error) {
 	if len(m.questionsAnswered) == 0 {
 		return "Cannot go back further", false, nil
 	}
@@ -173,19 +173,19 @@ func (m *addVaultMacro) GoBack() (message string, validResult bool, err error) {
 	return "Undo successful", true, nil
 }
 
-func (m *addVaultMacro) GetFinalChangeImpact(modelInput *input.Model, parsedModel *types.ParsedModel) (changes []string, message string, validResult bool, err error) {
+func (m *AddVaultMacro) GetFinalChangeImpact(modelInput *input.Model, parsedModel *types.Model) (changes []string, message string, validResult bool, err error) {
 	changeLogCollector := make([]string, 0)
 	message, validResult, err = m.applyChange(modelInput, parsedModel, &changeLogCollector, true)
 	return changeLogCollector, message, validResult, err
 }
 
-func (m *addVaultMacro) Execute(modelInput *input.Model, parsedModel *types.ParsedModel) (message string, validResult bool, err error) {
+func (m *AddVaultMacro) Execute(modelInput *input.Model, parsedModel *types.Model) (message string, validResult bool, err error) {
 	changeLogCollector := make([]string, 0)
 	message, validResult, err = m.applyChange(modelInput, parsedModel, &changeLogCollector, false)
 	return message, validResult, err
 }
 
-func (m *addVaultMacro) applyChange(modelInput *input.Model, parsedModel *types.ParsedModel, changeLogCollector *[]string, dryRun bool) (message string, validResult bool, err error) {
+func (m *AddVaultMacro) applyChange(modelInput *input.Model, parsedModel *types.Model, changeLogCollector *[]string, dryRun bool) (message string, validResult bool, err error) {
 	modelInput.AddTagToModelInput(m.macroState["vault-name"][0], dryRun, changeLogCollector)
 
 	var serverSideTechAssets = make([]string, 0)
@@ -217,9 +217,9 @@ func (m *addVaultMacro) applyChange(modelInput *input.Model, parsedModel *types.
 	storageID := "vault-storage"
 
 	if databaseUsed || filesystemUsed {
-		tech := types.FileServer.String() // TODO ask for local or remote and only local use execution-environment (and add separate tech type LocalFilesystem?)
+		tech := types.FileServer // TODO ask for local or remote and only local use execution-environment (and add separate tech type LocalFilesystem?)
 		if databaseUsed {
-			tech = types.Database.String()
+			tech = types.Database
 		}
 		if _, exists := parsedModel.TechnicalAssets[storageID]; !exists {
 			serverSideTechAssets = append(serverSideTechAssets, storageID)
@@ -347,7 +347,7 @@ func (m *addVaultMacro) applyChange(modelInput *input.Model, parsedModel *types.
 			OutOfScope:              false,
 			JustificationOutOfScope: "",
 			Size:                    types.Service.String(),
-			Technology:              types.Vault.String(),
+			Technology:              types.Vault,
 			Tags:                    []string{input.NormalizeTag(m.macroState["vault-name"][0])},
 			Internet:                false,
 			Machine:                 types.Virtual.String(),

@@ -2,6 +2,7 @@ package builtin
 
 import (
 	"sort"
+	"strings"
 
 	"github.com/threagile/threagile/pkg/security/types"
 )
@@ -12,9 +13,9 @@ func NewMissingCloudHardeningRule() *MissingCloudHardeningRule {
 	return &MissingCloudHardeningRule{}
 }
 
-func (*MissingCloudHardeningRule) Category() types.RiskCategory {
-	return types.RiskCategory{
-		Id:    "missing-cloud-hardening",
+func (*MissingCloudHardeningRule) Category() *types.RiskCategory {
+	return &types.RiskCategory{
+		ID:    "missing-cloud-hardening",
 		Title: "Missing Cloud Hardening",
 		Description: "Cloud components should be hardened according to the cloud vendor best practices. This affects their " +
 			"configuration, auditing, and further areas.",
@@ -56,8 +57,8 @@ func (*MissingCloudHardeningRule) SupportedTags() []string {
 	return res
 }
 
-func (r *MissingCloudHardeningRule) GenerateRisks(input *types.ParsedModel) []types.Risk {
-	risks := make([]types.Risk, 0)
+func (r *MissingCloudHardeningRule) GenerateRisks(input *types.Model) ([]*types.Risk, error) {
+	risks := make([]*types.Risk, 0)
 
 	sharedRuntimesWithUnspecificCloudRisks := make(map[string]bool)
 	trustBoundariesWithUnspecificCloudRisks := make(map[string]bool)
@@ -231,7 +232,7 @@ func (r *MissingCloudHardeningRule) GenerateRisks(input *types.ParsedModel) []ty
 	// just use the most sensitive asset as an example - to only create one general "AWS cloud hardening" risk, not many
 	if !addedAWS {
 		mostRelevantAsset := findMostSensitiveTechnicalAsset(input, techAssetIDsAWS)
-		if !mostRelevantAsset.IsZero() {
+		if mostRelevantAsset != nil {
 			risks = append(risks, r.createRiskForTechnicalAsset(input, mostRelevantAsset, "AWS", "CIS Benchmark for AWS"))
 			addedAWS = true
 		}
@@ -239,7 +240,7 @@ func (r *MissingCloudHardeningRule) GenerateRisks(input *types.ParsedModel) []ty
 	// just use the most sensitive asset as an example - to only create one general "Azure cloud hardening" risk, not many
 	if !addedAzure {
 		mostRelevantAsset := findMostSensitiveTechnicalAsset(input, techAssetIDsAzure)
-		if !mostRelevantAsset.IsZero() {
+		if mostRelevantAsset != nil {
 			risks = append(risks, r.createRiskForTechnicalAsset(input, mostRelevantAsset, "Azure", "CIS Benchmark for Microsoft Azure"))
 			addedAzure = true
 		}
@@ -247,7 +248,7 @@ func (r *MissingCloudHardeningRule) GenerateRisks(input *types.ParsedModel) []ty
 	// just use the most sensitive asset as an example - to only create one general "GCP cloud hardening" risk, not many
 	if !addedGCP {
 		mostRelevantAsset := findMostSensitiveTechnicalAsset(input, techAssetIDsGCP)
-		if !mostRelevantAsset.IsZero() {
+		if mostRelevantAsset != nil {
 			risks = append(risks, r.createRiskForTechnicalAsset(input, mostRelevantAsset, "GCP", "CIS Benchmark for Google Cloud Computing Platform"))
 			addedGCP = true
 		}
@@ -255,7 +256,7 @@ func (r *MissingCloudHardeningRule) GenerateRisks(input *types.ParsedModel) []ty
 	// just use the most sensitive asset as an example - to only create one general "GCP cloud hardening" risk, not many
 	if !addedOCP {
 		mostRelevantAsset := findMostSensitiveTechnicalAsset(input, techAssetIDsOCP)
-		if !mostRelevantAsset.IsZero() {
+		if mostRelevantAsset != nil {
 			risks = append(risks, r.createRiskForTechnicalAsset(input, mostRelevantAsset, "OCP", "Vendor Best Practices for Oracle Cloud Platform"))
 			addedOCP = true
 		}
@@ -273,10 +274,10 @@ func (r *MissingCloudHardeningRule) GenerateRisks(input *types.ParsedModel) []ty
 		// TODO add more tag-specific risks like also for aws:lambda etc. here
 	}
 
-	return risks
+	return risks, nil
 }
 
-func (r *MissingCloudHardeningRule) addTrustBoundaryAccordingToBaseTag(trustBoundary types.TrustBoundary,
+func (r *MissingCloudHardeningRule) addTrustBoundaryAccordingToBaseTag(trustBoundary *types.TrustBoundary,
 	trustBoundariesWithUnspecificCloudRisks map[string]bool,
 	trustBoundaryIDsAWS map[string]bool,
 	trustBoundaryIDsAzure map[string]bool,
@@ -300,7 +301,7 @@ func (r *MissingCloudHardeningRule) addTrustBoundaryAccordingToBaseTag(trustBoun
 	}
 }
 
-func (r *MissingCloudHardeningRule) addSharedRuntimeAccordingToBaseTag(sharedRuntime types.SharedRuntime,
+func (r *MissingCloudHardeningRule) addSharedRuntimeAccordingToBaseTag(sharedRuntime *types.SharedRuntime,
 	sharedRuntimesWithUnspecificCloudRisks map[string]bool,
 	sharedRuntimeIDsAWS map[string]bool,
 	sharedRuntimeIDsAzure map[string]bool,
@@ -324,7 +325,7 @@ func (r *MissingCloudHardeningRule) addSharedRuntimeAccordingToBaseTag(sharedRun
 	}
 }
 
-func addAccordingToBaseTag(techAsset types.TechnicalAsset, tags []string,
+func addAccordingToBaseTag(techAsset *types.TechnicalAsset, tags []string,
 	techAssetIDsWithTagSpecificCloudRisks map[string]bool,
 	techAssetIDsAWS map[string]bool,
 	techAssetIDsAzure map[string]bool,
@@ -347,8 +348,8 @@ func addAccordingToBaseTag(techAsset types.TechnicalAsset, tags []string,
 	}
 }
 
-func findMostSensitiveTechnicalAsset(input *types.ParsedModel, techAssets map[string]bool) types.TechnicalAsset {
-	var mostRelevantAsset types.TechnicalAsset
+func findMostSensitiveTechnicalAsset(input *types.Model, techAssets map[string]bool) *types.TechnicalAsset {
+	var mostRelevantAsset *types.TechnicalAsset
 	keys := make([]string, 0, len(techAssets))
 	for k := range techAssets {
 		keys = append(keys, k)
@@ -356,15 +357,17 @@ func findMostSensitiveTechnicalAsset(input *types.ParsedModel, techAssets map[st
 	sort.Strings(keys)
 	for _, id := range keys {
 		tA := input.TechnicalAssets[id]
-		if mostRelevantAsset.IsZero() || tA.HighestSensitivityScore() > mostRelevantAsset.HighestSensitivityScore() {
+		if mostRelevantAsset == nil || tA.HighestSensitivityScore() > mostRelevantAsset.HighestSensitivityScore() {
 			mostRelevantAsset = tA
 		}
 	}
 	return mostRelevantAsset
 }
 
-func (r *MissingCloudHardeningRule) createRiskForSharedRuntime(input *types.ParsedModel, sharedRuntime types.SharedRuntime, prefix, details string) types.Risk {
+func (r *MissingCloudHardeningRule) createRiskForSharedRuntime(input *types.Model, sharedRuntime *types.SharedRuntime, prefix, details string) *types.Risk {
+	id := ""
 	if len(prefix) > 0 {
+		id = "@" + strings.ToLower(prefix)
 		prefix = " (" + prefix + ")"
 	}
 	title := "<b>Missing Cloud Hardening" + prefix + "</b> risk at <b>" + sharedRuntime.Title + "</b>"
@@ -383,8 +386,8 @@ func (r *MissingCloudHardeningRule) createRiskForSharedRuntime(input *types.Pars
 		impact = types.VeryHighImpact
 	}
 	// create risk
-	risk := types.Risk{
-		CategoryId:                  r.Category().Id,
+	risk := &types.Risk{
+		CategoryId:                  r.Category().ID,
 		Severity:                    types.CalculateSeverity(types.Unlikely, impact),
 		ExploitationLikelihood:      types.Unlikely,
 		ExploitationImpact:          impact,
@@ -393,12 +396,14 @@ func (r *MissingCloudHardeningRule) createRiskForSharedRuntime(input *types.Pars
 		DataBreachProbability:       types.Probable,
 		DataBreachTechnicalAssetIDs: sharedRuntime.TechnicalAssetsRunning,
 	}
-	risk.SyntheticId = risk.CategoryId + "@" + sharedRuntime.Id
+	risk.SyntheticId = risk.CategoryId + "@" + sharedRuntime.Id + id
 	return risk
 }
 
-func (r *MissingCloudHardeningRule) createRiskForTrustBoundary(parsedModel *types.ParsedModel, trustBoundary types.TrustBoundary, prefix, details string) types.Risk {
+func (r *MissingCloudHardeningRule) createRiskForTrustBoundary(parsedModel *types.Model, trustBoundary *types.TrustBoundary, prefix, details string) *types.Risk {
+	id := ""
 	if len(prefix) > 0 {
+		id = "@" + strings.ToLower(prefix)
 		prefix = " (" + prefix + ")"
 	}
 	title := "<b>Missing Cloud Hardening" + prefix + "</b> risk at <b>" + trustBoundary.Title + "</b>"
@@ -417,8 +422,8 @@ func (r *MissingCloudHardeningRule) createRiskForTrustBoundary(parsedModel *type
 		impact = types.VeryHighImpact
 	}
 	// create risk
-	risk := types.Risk{
-		CategoryId:                  r.Category().Id,
+	risk := &types.Risk{
+		CategoryId:                  r.Category().ID,
 		Severity:                    types.CalculateSeverity(types.Unlikely, impact),
 		ExploitationLikelihood:      types.Unlikely,
 		ExploitationImpact:          impact,
@@ -427,12 +432,14 @@ func (r *MissingCloudHardeningRule) createRiskForTrustBoundary(parsedModel *type
 		DataBreachProbability:       types.Probable,
 		DataBreachTechnicalAssetIDs: trustBoundary.RecursivelyAllTechnicalAssetIDsInside(parsedModel),
 	}
-	risk.SyntheticId = risk.CategoryId + "@" + trustBoundary.Id
+	risk.SyntheticId = risk.CategoryId + "@" + trustBoundary.Id + id
 	return risk
 }
 
-func (r *MissingCloudHardeningRule) createRiskForTechnicalAsset(parsedModel *types.ParsedModel, technicalAsset types.TechnicalAsset, prefix, details string) types.Risk {
+func (r *MissingCloudHardeningRule) createRiskForTechnicalAsset(parsedModel *types.Model, technicalAsset *types.TechnicalAsset, prefix, details string) *types.Risk {
+	id := ""
 	if len(prefix) > 0 {
+		id = "@" + strings.ToLower(prefix)
 		prefix = " (" + prefix + ")"
 	}
 	title := "<b>Missing Cloud Hardening" + prefix + "</b> risk at <b>" + technicalAsset.Title + "</b>"
@@ -440,19 +447,19 @@ func (r *MissingCloudHardeningRule) createRiskForTechnicalAsset(parsedModel *typ
 		title += ": <u>" + details + "</u>"
 	}
 	impact := types.MediumImpact
-	if technicalAsset.HighestConfidentiality(parsedModel) >= types.Confidential ||
-		technicalAsset.HighestIntegrity(parsedModel) >= types.Critical ||
-		technicalAsset.HighestAvailability(parsedModel) >= types.Critical {
+	if technicalAsset.HighestProcessedConfidentiality(parsedModel) >= types.Confidential ||
+		technicalAsset.HighestProcessedIntegrity(parsedModel) >= types.Critical ||
+		technicalAsset.HighestProcessedAvailability(parsedModel) >= types.Critical {
 		impact = types.HighImpact
 	}
-	if technicalAsset.HighestConfidentiality(parsedModel) == types.StrictlyConfidential ||
-		technicalAsset.HighestIntegrity(parsedModel) == types.MissionCritical ||
-		technicalAsset.HighestAvailability(parsedModel) == types.MissionCritical {
+	if technicalAsset.HighestProcessedConfidentiality(parsedModel) == types.StrictlyConfidential ||
+		technicalAsset.HighestProcessedIntegrity(parsedModel) == types.MissionCritical ||
+		technicalAsset.HighestProcessedAvailability(parsedModel) == types.MissionCritical {
 		impact = types.VeryHighImpact
 	}
 	// create risk
-	risk := types.Risk{
-		CategoryId:                   r.Category().Id,
+	risk := &types.Risk{
+		CategoryId:                   r.Category().ID,
 		Severity:                     types.CalculateSeverity(types.Unlikely, impact),
 		ExploitationLikelihood:       types.Unlikely,
 		ExploitationImpact:           impact,
@@ -461,6 +468,6 @@ func (r *MissingCloudHardeningRule) createRiskForTechnicalAsset(parsedModel *typ
 		DataBreachProbability:        types.Probable,
 		DataBreachTechnicalAssetIDs:  []string{technicalAsset.Id},
 	}
-	risk.SyntheticId = risk.CategoryId + "@" + technicalAsset.Id
+	risk.SyntheticId = risk.CategoryId + "@" + technicalAsset.Id + id
 	return risk
 }

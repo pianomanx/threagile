@@ -5,6 +5,7 @@ Copyright © 2023 NAME HERE <EMAIL ADDRESS>
 package threagile
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -32,8 +33,8 @@ Aliases:
 Examples:
 {{.Example}}{{end}}{{if .HasAvailableSubCommands}}
 
-Available Commands:{{range .Commands}}{{if (or .IsAvailableCommand (eq .Name "help"))}}
-  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasHelpSubCommands}}
+Available Commands:{{range .Commands}}{{if (or .IsAvailableCommand (eq .Title "help"))}}
+  {{rpad .Title .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasHelpSubCommands}}
 
 Additional help topics:{{range .Commands}}{{if .IsAdditionalHelpTopicCommand}}
   {{rpad .CommandPath .CommandPathPadding}} {{.Short}}{{end}}{{end}}{{end}}
@@ -57,7 +58,7 @@ func (what *Threagile) initRoot() *Threagile {
 	defaultConfig := new(common.Config).Defaults(what.buildTimestamp)
 
 	what.rootCmd.PersistentFlags().StringVar(&what.flags.appDirFlag, appDirFlagName, defaultConfig.AppFolder, "app folder")
-	what.rootCmd.PersistentFlags().StringVar(&what.flags.binDirFlag, binDirFlagName, defaultConfig.BinFolder, "binary folder location")
+	what.rootCmd.PersistentFlags().StringVar(&what.flags.pluginDirFlag, pluginDirFlagName, defaultConfig.PluginFolder, "plugin folder location")
 	what.rootCmd.PersistentFlags().StringVar(&what.flags.outputDirFlag, outputFlagName, defaultConfig.OutputFolder, "output directory")
 	what.rootCmd.PersistentFlags().StringVar(&what.flags.tempDirFlag, tempDirFlagName, defaultConfig.TempFolder, "temporary folder location")
 
@@ -71,7 +72,7 @@ func (what *Threagile) initRoot() *Threagile {
 
 	what.rootCmd.PersistentFlags().StringVar(&what.flags.customRiskRulesPluginFlag, customRiskRulesPluginFlagName, strings.Join(defaultConfig.RiskRulesPlugins, ","), "comma-separated list of plugins file names with custom risk rules to load")
 	what.rootCmd.PersistentFlags().IntVar(&what.flags.diagramDpiFlag, diagramDpiFlagName, defaultConfig.DiagramDPI, "DPI used to render: maximum is "+fmt.Sprintf("%d", common.MaxGraphvizDPI)+"")
-	what.rootCmd.PersistentFlags().StringVar(&what.flags.skipRiskRulesFlag, skipRiskRulesFlagName, defaultConfig.SkipRiskRules, "comma-separated list of risk rules (by their ID) to skip")
+	what.rootCmd.PersistentFlags().StringVar(&what.flags.skipRiskRulesFlag, skipRiskRulesFlagName, strings.Join(defaultConfig.SkipRiskRules, ","), "comma-separated list of risk rules (by their ID) to skip")
 	what.rootCmd.PersistentFlags().BoolVar(&what.flags.ignoreOrphanedRiskTrackingFlag, ignoreOrphanedRiskTrackingFlagName, defaultConfig.IgnoreOrphanedRiskTracking, "ignore orphaned risk tracking (just log them) not matching a concrete risk")
 	what.rootCmd.PersistentFlags().StringVar(&what.flags.templateFileNameFlag, templateFileNameFlagName, defaultConfig.TemplateFilename, "background pdf file")
 
@@ -87,12 +88,12 @@ func (what *Threagile) initRoot() *Threagile {
 	return what
 }
 
-func (what *Threagile) run(*cobra.Command, []string) {
+func (what *Threagile) run(cmd *cobra.Command, _ []string) {
 	if !what.flags.interactiveFlag {
+		cmd.Println("Please add the --interactive flag to run in interactive mode.")
 		return
 	}
 
-	what.rootCmd.Use = "\b"
 	completer := readline.NewPrefixCompleter()
 	for _, child := range what.rootCmd.Commands() {
 		what.cobraToReadline(completer, child)
@@ -100,6 +101,7 @@ func (what *Threagile) run(*cobra.Command, []string) {
 
 	dir, homeError := os.UserHomeDir()
 	if homeError != nil {
+		cmd.Println("Error, please report bug at https://github.com/Threagile/threagile. Unable to find home directory: " + homeError.Error())
 		return
 	}
 
@@ -114,6 +116,7 @@ func (what *Threagile) run(*cobra.Command, []string) {
 	})
 
 	if readlineError != nil {
+		cmd.Println("Error, please report bug at https://github.com/Threagile/threagile. Unable to initialize readline: " + readlineError.Error())
 		return
 	}
 
@@ -121,7 +124,11 @@ func (what *Threagile) run(*cobra.Command, []string) {
 
 	for {
 		line, readError := shell.Readline()
+		if errors.Is(readError, readline.ErrInterrupt) {
+			return
+		}
 		if readError != nil {
+			cmd.Println("Error, please report bug at https://github.com/Threagile/threagile. Unable to read line: " + readError.Error())
 			return
 		}
 
@@ -131,24 +138,24 @@ func (what *Threagile) run(*cobra.Command, []string) {
 
 		params, parseError := shellwords.Parse(line)
 		if parseError != nil {
-			fmt.Printf("failed to parse command line: %s", parseError.Error())
+			cmd.Printf("failed to parse command line: %s", parseError.Error())
 			continue
 		}
 
 		cmd, args, findError := what.rootCmd.Find(params)
 		if findError != nil {
-			fmt.Printf("failed to find command: %s", findError.Error())
+			cmd.Printf("failed to find command: %s", findError.Error())
 			continue
 		}
 
 		if cmd == nil || cmd == what.rootCmd {
-			fmt.Printf("failed to find command")
+			cmd.Println("failed to find command")
 			continue
 		}
 
 		flagsError := cmd.ParseFlags(args)
 		if flagsError != nil {
-			fmt.Printf("invalid flags: %s", flagsError.Error())
+			cmd.Printf("invalid flags: %s", flagsError.Error())
 			continue
 		}
 
@@ -170,28 +177,27 @@ func (what *Threagile) run(*cobra.Command, []string) {
 		if cmd.RunE != nil {
 			runError := cmd.RunE(cmd, args)
 			if runError != nil {
-				fmt.Printf("error: %v \n", runError)
+				cmd.Printf("error: %v \n", runError)
 			}
 			continue
 		}
 
 		_ = cmd.Help()
-		continue
 	}
 }
 
-func (c *Threagile) cobraToReadline(node readline.PrefixCompleterInterface, cmd *cobra.Command) {
+func (what *Threagile) cobraToReadline(node readline.PrefixCompleterInterface, cmd *cobra.Command) {
 	cmd.SetUsageTemplate(UsageTemplate)
-	cmd.Use = c.usage(cmd)
+	cmd.Use = what.usage(cmd)
 	pcItem := readline.PcItem(cmd.Use)
 	node.SetChildren(append(node.GetChildren(), pcItem))
 
 	for _, child := range cmd.Commands() {
-		c.cobraToReadline(pcItem, child)
+		what.cobraToReadline(pcItem, child)
 	}
 }
 
-func (c *Threagile) usage(cmd *cobra.Command) string {
+func (what *Threagile) usage(cmd *cobra.Command) string {
 	words := make([]string, 0, len(cmd.ArgAliases)+1)
 	words = append(words, cmd.Use)
 
@@ -219,7 +225,7 @@ func (what *Threagile) readConfig(cmd *cobra.Command, buildTimestamp string) *co
 	cfg := new(common.Config).Defaults(buildTimestamp)
 	configError := cfg.Load(what.flags.configFlag)
 	if configError != nil {
-		fmt.Printf("WARNING: failed to load config file %q: %v\n", what.flags.configFlag, configError)
+		cmd.Printf("WARNING: failed to load config file %q: %v\n", what.flags.configFlag, configError)
 	}
 
 	flags := cmd.Flags()
@@ -233,8 +239,8 @@ func (what *Threagile) readConfig(cmd *cobra.Command, buildTimestamp string) *co
 	if isFlagOverridden(flags, appDirFlagName) {
 		cfg.AppFolder = cfg.CleanPath(what.flags.appDirFlag)
 	}
-	if isFlagOverridden(flags, binDirFlagName) {
-		cfg.BinFolder = cfg.CleanPath(what.flags.binDirFlag)
+	if isFlagOverridden(flags, pluginDirFlagName) {
+		cfg.PluginFolder = cfg.CleanPath(what.flags.pluginDirFlag)
 	}
 	if isFlagOverridden(flags, outputFlagName) {
 		cfg.OutputFolder = cfg.CleanPath(what.flags.outputDirFlag)
@@ -258,7 +264,7 @@ func (what *Threagile) readConfig(cmd *cobra.Command, buildTimestamp string) *co
 		cfg.RiskRulesPlugins = strings.Split(what.flags.customRiskRulesPluginFlag, ",")
 	}
 	if isFlagOverridden(flags, skipRiskRulesFlagName) {
-		cfg.SkipRiskRules = what.flags.skipRiskRulesFlag
+		cfg.SkipRiskRules = strings.Split(what.flags.skipRiskRulesFlag, ",")
 	}
 	if isFlagOverridden(flags, ignoreOrphanedRiskTrackingFlagName) {
 		cfg.IgnoreOrphanedRiskTracking = what.flags.ignoreOrphanedRiskTrackingFlag

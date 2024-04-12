@@ -10,9 +10,9 @@ func NewMissingVaultIsolationRule() *MissingVaultIsolationRule {
 	return &MissingVaultIsolationRule{}
 }
 
-func (*MissingVaultIsolationRule) Category() types.RiskCategory {
-	return types.RiskCategory{
-		Id:    "missing-vault-isolation",
+func (*MissingVaultIsolationRule) Category() *types.RiskCategory {
+	return &types.RiskCategory{
+		ID:    "missing-vault-isolation",
 		Title: "Missing Vault Isolation",
 		Description: "Highly sensitive vault assets and their data stores should be isolated from other assets " +
 			"by their own network segmentation trust-boundary (" + types.ExecutionEnvironment.String() + " boundaries do not count as network isolation).",
@@ -41,10 +41,10 @@ func (*MissingVaultIsolationRule) SupportedTags() []string {
 	return []string{}
 }
 
-func (r *MissingVaultIsolationRule) GenerateRisks(input *types.ParsedModel) []types.Risk {
-	risks := make([]types.Risk, 0)
+func (r *MissingVaultIsolationRule) GenerateRisks(input *types.Model) ([]*types.Risk, error) {
+	risks := make([]*types.Risk, 0)
 	for _, technicalAsset := range input.TechnicalAssets {
-		if !technicalAsset.OutOfScope && technicalAsset.Technology == types.Vault {
+		if !technicalAsset.OutOfScope && technicalAsset.Technologies.GetAttribute(types.Vault) {
 			moreImpact := technicalAsset.Confidentiality == types.StrictlyConfidential ||
 				technicalAsset.Integrity == types.MissionCritical ||
 				technicalAsset.Availability == types.MissionCritical
@@ -54,7 +54,7 @@ func (r *MissingVaultIsolationRule) GenerateRisks(input *types.ParsedModel) []ty
 			for sparringAssetCandidateId := range input.TechnicalAssets { // so inner loop again over all assets
 				if technicalAsset.Id != sparringAssetCandidateId {
 					sparringAssetCandidate := input.TechnicalAssets[sparringAssetCandidateId]
-					if sparringAssetCandidate.Technology != types.Vault && !isVaultStorage(input, technicalAsset, sparringAssetCandidate) {
+					if !sparringAssetCandidate.Technologies.GetAttribute(types.Vault) && !isVaultStorage(input, technicalAsset, sparringAssetCandidate) {
 						if technicalAsset.IsSameExecutionEnvironment(input, sparringAssetCandidateId) {
 							createRiskEntry = true
 							sameExecutionEnv = true
@@ -69,14 +69,14 @@ func (r *MissingVaultIsolationRule) GenerateRisks(input *types.ParsedModel) []ty
 			}
 		}
 	}
-	return risks
+	return risks, nil
 }
 
-func isVaultStorage(parsedModel *types.ParsedModel, vault types.TechnicalAsset, storage types.TechnicalAsset) bool {
+func isVaultStorage(parsedModel *types.Model, vault *types.TechnicalAsset, storage *types.TechnicalAsset) bool {
 	return storage.Type == types.Datastore && vault.HasDirectConnection(parsedModel, storage.Id)
 }
 
-func (r *MissingVaultIsolationRule) createRisk(techAsset types.TechnicalAsset, moreImpact bool, sameExecutionEnv bool) types.Risk {
+func (r *MissingVaultIsolationRule) createRisk(techAsset *types.TechnicalAsset, moreImpact bool, sameExecutionEnv bool) *types.Risk {
 	impact := types.MediumImpact
 	likelihood := types.Unlikely
 	others := "<b>in the same network segment</b>"
@@ -87,8 +87,8 @@ func (r *MissingVaultIsolationRule) createRisk(techAsset types.TechnicalAsset, m
 		likelihood = types.Likely
 		others = "<b>in the same execution environment</b>"
 	}
-	risk := types.Risk{
-		CategoryId:             r.Category().Id,
+	risk := &types.Risk{
+		CategoryId:             r.Category().ID,
 		Severity:               types.CalculateSeverity(likelihood, impact),
 		ExploitationLikelihood: likelihood,
 		ExploitationImpact:     impact,

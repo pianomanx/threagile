@@ -6,7 +6,6 @@ package types
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"gopkg.in/yaml.v3"
 	"strings"
@@ -47,7 +46,7 @@ func ParseDataFormat(value string) (dataFormat DataFormat, err error) {
 			return candidate.(DataFormat), err
 		}
 	}
-	return dataFormat, errors.New("Unable to parse into type: " + value)
+	return dataFormat, fmt.Errorf("unable to parse into type: %v", value)
 }
 
 func (what DataFormat) String() string {
@@ -66,6 +65,14 @@ func (what DataFormat) Title() string {
 func (what DataFormat) Description() string {
 	return [...]string{"JSON marshalled object data", "XML structured data", "Serialization-based object graphs",
 		"File input/uploads", "CSV tabular data"}[what]
+}
+
+type ByDataFormatAcceptedSort []DataFormat
+
+func (what ByDataFormatAcceptedSort) Len() int      { return len(what) }
+func (what ByDataFormatAcceptedSort) Swap(i, j int) { what[i], what[j] = what[j], what[i] }
+func (what ByDataFormatAcceptedSort) Less(i, j int) bool {
+	return what[i].String() < what[j].String()
 }
 
 func (what DataFormat) MarshalJSON() ([]byte, error) {
@@ -110,12 +117,4 @@ func (what DataFormat) find(value string) (DataFormat, error) {
 	}
 
 	return DataFormat(0), fmt.Errorf("unknown data format value %q", value)
-}
-
-type ByDataFormatAcceptedSort []DataFormat
-
-func (what ByDataFormatAcceptedSort) Len() int      { return len(what) }
-func (what ByDataFormatAcceptedSort) Swap(i, j int) { what[i], what[j] = what[j], what[i] }
-func (what ByDataFormatAcceptedSort) Less(i, j int) bool {
-	return what[i].String() < what[j].String()
 }

@@ -36,25 +36,43 @@ func (what CommunicationLink) IsTaggedWithBaseTag(baseTag string) bool {
 	return IsTaggedWithBaseTag(what.Tags, baseTag)
 }
 
-func (what CommunicationLink) IsAcrossTrustBoundary(parsedModel *ParsedModel) bool {
-	trustBoundaryOfSourceAsset := parsedModel.DirectContainingTrustBoundaryMappedByTechnicalAssetId[what.SourceId]
-	trustBoundaryOfTargetAsset := parsedModel.DirectContainingTrustBoundaryMappedByTechnicalAssetId[what.TargetId]
+func (what CommunicationLink) IsAcrossTrustBoundary(parsedModel *Model) bool {
+	trustBoundaryOfSourceAsset, trustBoundaryOfSourceAssetOk := parsedModel.DirectContainingTrustBoundaryMappedByTechnicalAssetId[what.SourceId]
+	trustBoundaryOfTargetAsset, trustBoundaryOfTargetAssetOk := parsedModel.DirectContainingTrustBoundaryMappedByTechnicalAssetId[what.TargetId]
+	if trustBoundaryOfSourceAssetOk != trustBoundaryOfTargetAssetOk {
+		return false
+	}
+	if !trustBoundaryOfSourceAssetOk && !trustBoundaryOfTargetAssetOk {
+		return true
+	}
 	return trustBoundaryOfSourceAsset.Id != trustBoundaryOfTargetAsset.Id
 }
 
-func (what CommunicationLink) IsAcrossTrustBoundaryNetworkOnly(parsedModel *ParsedModel) bool {
-	trustBoundaryOfSourceAsset := parsedModel.DirectContainingTrustBoundaryMappedByTechnicalAssetId[what.SourceId]
-	if !trustBoundaryOfSourceAsset.Type.IsNetworkBoundary() { // find and use the parent boundary then
-		trustBoundaryOfSourceAsset = parsedModel.TrustBoundaries[trustBoundaryOfSourceAsset.ParentTrustBoundaryID(parsedModel)]
+func (what CommunicationLink) IsAcrossTrustBoundaryNetworkOnly(parsedModel *Model) bool {
+	trustBoundaryOfSourceAsset, trustBoundaryOfSourceAssetOk := parsedModel.DirectContainingTrustBoundaryMappedByTechnicalAssetId[what.SourceId]
+	if !trustBoundaryOfSourceAssetOk {
+		return false
 	}
-	trustBoundaryOfTargetAsset := parsedModel.DirectContainingTrustBoundaryMappedByTechnicalAssetId[what.TargetId]
+	if !trustBoundaryOfSourceAsset.Type.IsNetworkBoundary() { // find and use the parent boundary then
+		trustBoundaryOfSourceAsset, trustBoundaryOfSourceAssetOk = parsedModel.TrustBoundaries[trustBoundaryOfSourceAsset.ParentTrustBoundaryID(parsedModel)]
+		if !trustBoundaryOfSourceAssetOk {
+			return false
+		}
+	}
+	trustBoundaryOfTargetAsset, trustBoundaryOfTargetAssetOk := parsedModel.DirectContainingTrustBoundaryMappedByTechnicalAssetId[what.TargetId]
+	if !trustBoundaryOfTargetAssetOk {
+		return false
+	}
 	if !trustBoundaryOfTargetAsset.Type.IsNetworkBoundary() { // find and use the parent boundary then
-		trustBoundaryOfTargetAsset = parsedModel.TrustBoundaries[trustBoundaryOfTargetAsset.ParentTrustBoundaryID(parsedModel)]
+		trustBoundaryOfTargetAsset, trustBoundaryOfTargetAssetOk = parsedModel.TrustBoundaries[trustBoundaryOfTargetAsset.ParentTrustBoundaryID(parsedModel)]
+		if !trustBoundaryOfTargetAssetOk {
+			return false
+		}
 	}
 	return trustBoundaryOfSourceAsset.Id != trustBoundaryOfTargetAsset.Id && trustBoundaryOfTargetAsset.Type.IsNetworkBoundary()
 }
 
-func (what CommunicationLink) HighestConfidentiality(parsedModel *ParsedModel) Confidentiality {
+func (what CommunicationLink) HighestConfidentiality(parsedModel *Model) Confidentiality {
 	highest := Public
 	for _, dataId := range what.DataAssetsSent {
 		dataAsset := parsedModel.DataAssets[dataId]
@@ -71,7 +89,7 @@ func (what CommunicationLink) HighestConfidentiality(parsedModel *ParsedModel) C
 	return highest
 }
 
-func (what CommunicationLink) HighestIntegrity(parsedModel *ParsedModel) Criticality {
+func (what CommunicationLink) HighestIntegrity(parsedModel *Model) Criticality {
 	highest := Archive
 	for _, dataId := range what.DataAssetsSent {
 		dataAsset := parsedModel.DataAssets[dataId]
@@ -88,7 +106,7 @@ func (what CommunicationLink) HighestIntegrity(parsedModel *ParsedModel) Critica
 	return highest
 }
 
-func (what CommunicationLink) HighestAvailability(parsedModel *ParsedModel) Criticality {
+func (what CommunicationLink) HighestAvailability(parsedModel *Model) Criticality {
 	highest := Archive
 	for _, dataId := range what.DataAssetsSent {
 		dataAsset := parsedModel.DataAssets[dataId]
@@ -105,8 +123,8 @@ func (what CommunicationLink) HighestAvailability(parsedModel *ParsedModel) Crit
 	return highest
 }
 
-func (what CommunicationLink) DataAssetsSentSorted(parsedModel *ParsedModel) []DataAsset {
-	result := make([]DataAsset, 0)
+func (what CommunicationLink) DataAssetsSentSorted(parsedModel *Model) []*DataAsset {
+	result := make([]*DataAsset, 0)
 	for _, assetID := range what.DataAssetsSent {
 		result = append(result, parsedModel.DataAssets[assetID])
 	}
@@ -114,8 +132,8 @@ func (what CommunicationLink) DataAssetsSentSorted(parsedModel *ParsedModel) []D
 	return result
 }
 
-func (what CommunicationLink) DataAssetsReceivedSorted(parsedModel *ParsedModel) []DataAsset {
-	result := make([]DataAsset, 0)
+func (what CommunicationLink) DataAssetsReceivedSorted(parsedModel *Model) []*DataAsset {
+	result := make([]*DataAsset, 0)
 	for _, assetID := range what.DataAssetsReceived {
 		result = append(result, parsedModel.DataAssets[assetID])
 	}
@@ -127,7 +145,7 @@ func (what CommunicationLink) IsBidirectional() bool {
 	return len(what.DataAssetsSent) > 0 && len(what.DataAssetsReceived) > 0
 }
 
-type ByTechnicalCommunicationLinkIdSort []CommunicationLink
+type ByTechnicalCommunicationLinkIdSort []*CommunicationLink
 
 func (what ByTechnicalCommunicationLinkIdSort) Len() int      { return len(what) }
 func (what ByTechnicalCommunicationLinkIdSort) Swap(i, j int) { what[i], what[j] = what[j], what[i] }
@@ -135,7 +153,7 @@ func (what ByTechnicalCommunicationLinkIdSort) Less(i, j int) bool {
 	return what[i].Id > what[j].Id
 }
 
-type ByTechnicalCommunicationLinkTitleSort []CommunicationLink
+type ByTechnicalCommunicationLinkTitleSort []*CommunicationLink
 
 func (what ByTechnicalCommunicationLinkTitleSort) Len() int      { return len(what) }
 func (what ByTechnicalCommunicationLinkTitleSort) Swap(i, j int) { what[i], what[j] = what[j], what[i] }

@@ -10,9 +10,9 @@ func NewContainerBaseImageBackdooringRule() *ContainerBaseImageBackdooringRule {
 	return &ContainerBaseImageBackdooringRule{}
 }
 
-func (*ContainerBaseImageBackdooringRule) Category() types.RiskCategory {
-	return types.RiskCategory{
-		Id:    "container-baseimage-backdooring",
+func (*ContainerBaseImageBackdooringRule) Category() *types.RiskCategory {
+	return &types.RiskCategory{
+		ID:    "container-baseimage-backdooring",
 		Title: "Container Base Image Backdooring",
 		Description: "When a technical asset is built using container technologies, Base Image Backdooring risks might arise where " +
 			"base images and other layers used contain vulnerable components or backdoors." +
@@ -41,27 +41,27 @@ func (*ContainerBaseImageBackdooringRule) SupportedTags() []string {
 	return []string{}
 }
 
-func (r *ContainerBaseImageBackdooringRule) GenerateRisks(parsedModel *types.ParsedModel) []types.Risk {
-	risks := make([]types.Risk, 0)
+func (r *ContainerBaseImageBackdooringRule) GenerateRisks(parsedModel *types.Model) ([]*types.Risk, error) {
+	risks := make([]*types.Risk, 0)
 	for _, id := range parsedModel.SortedTechnicalAssetIDs() {
 		technicalAsset := parsedModel.TechnicalAssets[id]
 		if !technicalAsset.OutOfScope && technicalAsset.Machine == types.Container {
 			risks = append(risks, r.createRisk(parsedModel, technicalAsset))
 		}
 	}
-	return risks
+	return risks, nil
 }
 
-func (r *ContainerBaseImageBackdooringRule) createRisk(parsedModel *types.ParsedModel, technicalAsset types.TechnicalAsset) types.Risk {
+func (r *ContainerBaseImageBackdooringRule) createRisk(parsedModel *types.Model, technicalAsset *types.TechnicalAsset) *types.Risk {
 	title := "<b>Container Base Image Backdooring</b> risk at <b>" + technicalAsset.Title + "</b>"
 	impact := types.MediumImpact
-	if technicalAsset.HighestConfidentiality(parsedModel) == types.StrictlyConfidential ||
-		technicalAsset.HighestIntegrity(parsedModel) == types.MissionCritical ||
-		technicalAsset.HighestAvailability(parsedModel) == types.MissionCritical {
+	if technicalAsset.HighestProcessedConfidentiality(parsedModel) == types.StrictlyConfidential ||
+		technicalAsset.HighestProcessedIntegrity(parsedModel) == types.MissionCritical ||
+		technicalAsset.HighestProcessedAvailability(parsedModel) == types.MissionCritical {
 		impact = types.HighImpact
 	}
-	risk := types.Risk{
-		CategoryId:                   r.Category().Id,
+	risk := &types.Risk{
+		CategoryId:                   r.Category().ID,
 		Severity:                     types.CalculateSeverity(types.Unlikely, impact),
 		ExploitationLikelihood:       types.Unlikely,
 		ExploitationImpact:           impact,

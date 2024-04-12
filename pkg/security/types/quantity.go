@@ -6,7 +6,6 @@ package types
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"gopkg.in/yaml.v3"
 	"strings"
@@ -31,13 +30,7 @@ func QuantityValues() []TypeEnum {
 }
 
 func ParseQuantity(value string) (quantity Quantity, err error) {
-	value = strings.TrimSpace(value)
-	for _, candidate := range QuantityValues() {
-		if candidate.String() == value {
-			return candidate.(Quantity), err
-		}
-	}
-	return quantity, errors.New("Unable to parse into type: " + value)
+	return Quantity(0).Find(value)
 }
 
 var QuantityTypeDescription = [...]TypeDescription{
@@ -65,6 +58,16 @@ func (what Quantity) QuantityFactor() float64 {
 	return [...]float64{1, 2, 3, 5}[what]
 }
 
+func (what Quantity) Find(value string) (Quantity, error) {
+	for index, description := range QuantityTypeDescription {
+		if strings.EqualFold(value, description.Name) {
+			return Quantity(index), nil
+		}
+	}
+
+	return Quantity(0), fmt.Errorf("unknown quantity value %q", value)
+}
+
 func (what Quantity) MarshalJSON() ([]byte, error) {
 	return json.Marshal(what.String())
 }
@@ -76,7 +79,7 @@ func (what *Quantity) UnmarshalJSON(data []byte) error {
 		return unmarshalError
 	}
 
-	value, findError := what.find(text)
+	value, findError := what.Find(text)
 	if findError != nil {
 		return findError
 	}
@@ -90,21 +93,11 @@ func (what Quantity) MarshalYAML() (interface{}, error) {
 }
 
 func (what *Quantity) UnmarshalYAML(node *yaml.Node) error {
-	value, findError := what.find(node.Value)
+	value, findError := what.Find(node.Value)
 	if findError != nil {
 		return findError
 	}
 
 	*what = value
 	return nil
-}
-
-func (what Quantity) find(value string) (Quantity, error) {
-	for index, description := range QuantityTypeDescription {
-		if strings.EqualFold(value, description.Name) {
-			return Quantity(index), nil
-		}
-	}
-
-	return Quantity(0), fmt.Errorf("unknown quantity value %q", value)
 }

@@ -10,9 +10,9 @@ func NewMissingWafRule() *MissingWafRule {
 	return &MissingWafRule{}
 }
 
-func (*MissingWafRule) Category() types.RiskCategory {
-	return types.RiskCategory{
-		Id:    "missing-waf",
+func (*MissingWafRule) Category() *types.RiskCategory {
+	return &types.RiskCategory{
+		ID:    "missing-waf",
 		Title: "Missing Web Application Firewall (WAF)",
 		Description: "To have a first line of filtering defense, security architectures with web-services or web-applications should include a WAF in front of them. " +
 			"Even though a WAF is not a replacement for security (all components must be secure even without a WAF) it adds another layer of defense to the overall " +
@@ -23,7 +23,7 @@ func (*MissingWafRule) Category() types.RiskCategory {
 		Action:     "Web Application Firewall (WAF)",
 		Mitigation: "Consider placing a Web Application Firewall (WAF) in front of the web-services and/or web-applications. For cloud environments many cloud providers offer " +
 			"pre-configured WAFs. Even reverse proxies can be enhances by a WAF component via ModSecurity plugins.",
-		Check:          "Is a Web Application Firewall (WAF) in place?",
+		Check:          "GetAttribute a Web Application Firewall (WAF) in place?",
 		Function:       types.Operations,
 		STRIDE:         types.Tampering,
 		DetectionLogic: "In-scope web-services and/or web-applications accessed across a network trust boundary not having a Web Application Firewall (WAF) in front of them.",
@@ -39,35 +39,35 @@ func (*MissingWafRule) SupportedTags() []string {
 	return []string{}
 }
 
-func (r *MissingWafRule) GenerateRisks(input *types.ParsedModel) []types.Risk {
-	risks := make([]types.Risk, 0)
+func (r *MissingWafRule) GenerateRisks(input *types.Model) ([]*types.Risk, error) {
+	risks := make([]*types.Risk, 0)
 	for _, technicalAsset := range input.TechnicalAssets {
 		if !technicalAsset.OutOfScope &&
-			(technicalAsset.Technology.IsWebApplication() || technicalAsset.Technology.IsWebService()) {
+			(technicalAsset.Technologies.GetAttribute(types.WebApplication) || technicalAsset.Technologies.GetAttribute(types.IsWebService)) {
 			for _, incomingAccess := range input.IncomingTechnicalCommunicationLinksMappedByTargetId[technicalAsset.Id] {
 				if incomingAccess.IsAcrossTrustBoundaryNetworkOnly(input) &&
 					incomingAccess.Protocol.IsPotentialWebAccessProtocol() &&
-					input.TechnicalAssets[incomingAccess.SourceId].Technology != types.WAF {
+					!input.TechnicalAssets[incomingAccess.SourceId].Technologies.GetAttribute(types.WAF) {
 					risks = append(risks, r.createRisk(input, technicalAsset))
 					break
 				}
 			}
 		}
 	}
-	return risks
+	return risks, nil
 }
 
-func (r *MissingWafRule) createRisk(input *types.ParsedModel, technicalAsset types.TechnicalAsset) types.Risk {
+func (r *MissingWafRule) createRisk(input *types.Model, technicalAsset *types.TechnicalAsset) *types.Risk {
 	title := "<b>Missing Web Application Firewall (WAF)</b> risk at <b>" + technicalAsset.Title + "</b>"
 	likelihood := types.Unlikely
 	impact := types.LowImpact
-	if technicalAsset.HighestConfidentiality(input) == types.StrictlyConfidential ||
-		technicalAsset.HighestIntegrity(input) == types.MissionCritical ||
-		technicalAsset.HighestAvailability(input) == types.MissionCritical {
+	if technicalAsset.HighestProcessedConfidentiality(input) == types.StrictlyConfidential ||
+		technicalAsset.HighestProcessedIntegrity(input) == types.MissionCritical ||
+		technicalAsset.HighestProcessedAvailability(input) == types.MissionCritical {
 		impact = types.MediumImpact
 	}
-	risk := types.Risk{
-		CategoryId:                   r.Category().Id,
+	risk := &types.Risk{
+		CategoryId:                   r.Category().ID,
 		Severity:                     types.CalculateSeverity(likelihood, impact),
 		ExploitationLikelihood:       likelihood,
 		ExploitationImpact:           impact,

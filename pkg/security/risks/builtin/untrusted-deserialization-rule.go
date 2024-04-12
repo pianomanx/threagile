@@ -10,9 +10,9 @@ func NewUntrustedDeserializationRule() *UntrustedDeserializationRule {
 	return &UntrustedDeserializationRule{}
 }
 
-func (*UntrustedDeserializationRule) Category() types.RiskCategory {
-	return types.RiskCategory{
-		Id:    "untrusted-deserialization",
+func (*UntrustedDeserializationRule) Category() *types.RiskCategory {
+	return &types.RiskCategory{
+		ID:    "untrusted-deserialization",
 		Title: "Untrusted Deserialization",
 		Description: "When a technical asset accepts data in a specific serialized form (like Java or .NET serialization), " +
 			"Untrusted Deserialization risks might arise." +
@@ -42,8 +42,8 @@ func (*UntrustedDeserializationRule) SupportedTags() []string {
 	return []string{}
 }
 
-func (r *UntrustedDeserializationRule) GenerateRisks(input *types.ParsedModel) []types.Risk {
-	risks := make([]types.Risk, 0)
+func (r *UntrustedDeserializationRule) GenerateRisks(input *types.Model) ([]*types.Risk, error) {
+	risks := make([]*types.Risk, 0)
 	for _, id := range input.SortedTechnicalAssetIDs() {
 		technicalAsset := input.TechnicalAssets[id]
 		if technicalAsset.OutOfScope {
@@ -56,7 +56,7 @@ func (r *UntrustedDeserializationRule) GenerateRisks(input *types.ParsedModel) [
 				hasOne = true
 			}
 		}
-		if technicalAsset.Technology == types.EJB {
+		if technicalAsset.Technologies.GetAttribute(types.EJB) {
 			hasOne = true
 		}
 		// check for any incoming IIOP and JRMP protocols
@@ -74,10 +74,10 @@ func (r *UntrustedDeserializationRule) GenerateRisks(input *types.ParsedModel) [
 			risks = append(risks, r.createRisk(input, technicalAsset, acrossTrustBoundary, commLinkTitle))
 		}
 	}
-	return risks
+	return risks, nil
 }
 
-func (r *UntrustedDeserializationRule) createRisk(parsedModel *types.ParsedModel, technicalAsset types.TechnicalAsset, acrossTrustBoundary bool, commLinkTitle string) types.Risk {
+func (r *UntrustedDeserializationRule) createRisk(parsedModel *types.Model, technicalAsset *types.TechnicalAsset, acrossTrustBoundary bool, commLinkTitle string) *types.Risk {
 	title := "<b>Untrusted Deserialization</b> risk at <b>" + technicalAsset.Title + "</b>"
 	impact := types.HighImpact
 	likelihood := types.Likely
@@ -85,13 +85,13 @@ func (r *UntrustedDeserializationRule) createRisk(parsedModel *types.ParsedModel
 		likelihood = types.VeryLikely
 		title += " across a trust boundary (at least via communication link <b>" + commLinkTitle + "</b>)"
 	}
-	if technicalAsset.HighestConfidentiality(parsedModel) == types.StrictlyConfidential ||
-		technicalAsset.HighestIntegrity(parsedModel) == types.MissionCritical ||
-		technicalAsset.HighestAvailability(parsedModel) == types.MissionCritical {
+	if technicalAsset.HighestProcessedConfidentiality(parsedModel) == types.StrictlyConfidential ||
+		technicalAsset.HighestProcessedIntegrity(parsedModel) == types.MissionCritical ||
+		technicalAsset.HighestProcessedAvailability(parsedModel) == types.MissionCritical {
 		impact = types.VeryHighImpact
 	}
-	risk := types.Risk{
-		CategoryId:                   r.Category().Id,
+	risk := &types.Risk{
+		CategoryId:                   r.Category().ID,
 		Severity:                     types.CalculateSeverity(likelihood, impact),
 		ExploitationLikelihood:       likelihood,
 		ExploitationImpact:           impact,

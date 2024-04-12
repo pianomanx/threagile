@@ -10,9 +10,9 @@ func NewCodeBackdooringRule() *CodeBackdooringRule {
 	return &CodeBackdooringRule{}
 }
 
-func (*CodeBackdooringRule) Category() types.RiskCategory {
-	return types.RiskCategory{
-		Id:    "code-backdooring",
+func (*CodeBackdooringRule) Category() *types.RiskCategory {
+	return &types.RiskCategory{
+		ID:    "code-backdooring",
 		Title: "Code Backdooring",
 		Description: "For each build-pipeline component Code Backdooring risks might arise where attackers compromise the build-pipeline " +
 			"in order to let backdoored artifacts be shipped into production. Aside from direct code backdooring this includes " +
@@ -46,11 +46,11 @@ func (*CodeBackdooringRule) SupportedTags() []string {
 	return []string{}
 }
 
-func (r *CodeBackdooringRule) GenerateRisks(parsedModel *types.ParsedModel) []types.Risk {
-	risks := make([]types.Risk, 0)
+func (r *CodeBackdooringRule) GenerateRisks(parsedModel *types.Model) ([]*types.Risk, error) {
+	risks := make([]*types.Risk, 0)
 	for _, id := range parsedModel.SortedTechnicalAssetIDs() {
 		technicalAsset := parsedModel.TechnicalAssets[id]
-		if !technicalAsset.OutOfScope && technicalAsset.Technology.IsDevelopmentRelevant() {
+		if !technicalAsset.OutOfScope && technicalAsset.Technologies.GetAttribute(types.IsDevelopmentRelevant) {
 			if technicalAsset.Internet {
 				risks = append(risks, r.createRisk(parsedModel, technicalAsset, true))
 				continue
@@ -58,28 +58,26 @@ func (r *CodeBackdooringRule) GenerateRisks(parsedModel *types.ParsedModel) []ty
 
 			// TODO: ensure that even internet or unmanaged clients coming over a reverse-proxy or load-balancer like component are treated as if it was directly accessed/exposed on the internet or towards unmanaged dev clients
 
-			//riskByLinkAdded := false
 			for _, callerLink := range parsedModel.IncomingTechnicalCommunicationLinksMappedByTargetId[technicalAsset.Id] {
 				caller := parsedModel.TechnicalAssets[callerLink.SourceId]
 				if (!callerLink.VPN && caller.Internet) || caller.OutOfScope {
 					risks = append(risks, r.createRisk(parsedModel, technicalAsset, true))
-					//riskByLinkAdded = true
 					break
 				}
 			}
 		}
 	}
-	return risks
+	return risks, nil
 }
 
-func (r *CodeBackdooringRule) createRisk(input *types.ParsedModel, technicalAsset types.TechnicalAsset, elevatedRisk bool) types.Risk {
+func (r *CodeBackdooringRule) createRisk(input *types.Model, technicalAsset *types.TechnicalAsset, elevatedRisk bool) *types.Risk {
 	title := "<b>Code Backdooring</b> risk at <b>" + technicalAsset.Title + "</b>"
 	impact := types.LowImpact
-	if technicalAsset.Technology != types.CodeInspectionPlatform {
+	if !technicalAsset.Technologies.GetAttribute(types.CodeInspectionPlatform) {
 		if elevatedRisk {
 			impact = types.MediumImpact
 		}
-		if technicalAsset.HighestConfidentiality(input) >= types.Confidential || technicalAsset.HighestIntegrity(input) >= types.Critical {
+		if technicalAsset.HighestProcessedConfidentiality(input) >= types.Confidential || technicalAsset.HighestProcessedIntegrity(input) >= types.Critical {
 			impact = types.MediumImpact
 			if elevatedRisk {
 				impact = types.HighImpact
@@ -106,8 +104,8 @@ func (r *CodeBackdooringRule) createRisk(input *types.ParsedModel, technicalAsse
 		dataBreachTechnicalAssetIDs = append(dataBreachTechnicalAssetIDs, key)
 	}
 	// create risk
-	risk := types.Risk{
-		CategoryId:                   r.Category().Id,
+	risk := &types.Risk{
+		CategoryId:                   r.Category().ID,
 		Severity:                     types.CalculateSeverity(types.Unlikely, impact),
 		ExploitationLikelihood:       types.Unlikely,
 		ExploitationImpact:           impact,

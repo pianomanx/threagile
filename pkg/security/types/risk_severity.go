@@ -6,7 +6,6 @@ package types
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"gopkg.in/yaml.v3"
 	"strings"
@@ -41,16 +40,7 @@ var RiskSeverityTypeDescription = [...]TypeDescription{
 }
 
 func ParseRiskSeverity(value string) (riskSeverity RiskSeverity, err error) {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return MediumSeverity, nil
-	}
-	for _, candidate := range RiskSeverityValues() {
-		if candidate.String() == value {
-			return candidate.(RiskSeverity), err
-		}
-	}
-	return riskSeverity, errors.New("Unable to parse into type: " + value)
+	return RiskSeverity(0).Find(value)
 }
 
 func (what RiskSeverity) String() string {
@@ -66,6 +56,20 @@ func (what RiskSeverity) Title() string {
 	return [...]string{"Low", "Medium", "Elevated", "High", "Critical"}[what]
 }
 
+func (what RiskSeverity) Find(value string) (RiskSeverity, error) {
+	if len(value) == 0 {
+		return MediumSeverity, nil
+	}
+
+	for index, description := range RiskSeverityTypeDescription {
+		if strings.EqualFold(value, description.Name) {
+			return RiskSeverity(index), nil
+		}
+	}
+
+	return RiskSeverity(0), fmt.Errorf("unknown risk severity value %q", value)
+}
+
 func (what RiskSeverity) MarshalJSON() ([]byte, error) {
 	return json.Marshal(what.String())
 }
@@ -77,7 +81,7 @@ func (what *RiskSeverity) UnmarshalJSON(data []byte) error {
 		return unmarshalError
 	}
 
-	value, findError := what.find(text)
+	value, findError := what.Find(text)
 	if findError != nil {
 		return findError
 	}
@@ -91,21 +95,11 @@ func (what RiskSeverity) MarshalYAML() (interface{}, error) {
 }
 
 func (what *RiskSeverity) UnmarshalYAML(node *yaml.Node) error {
-	value, findError := what.find(node.Value)
+	value, findError := what.Find(node.Value)
 	if findError != nil {
 		return findError
 	}
 
 	*what = value
 	return nil
-}
-
-func (what RiskSeverity) find(value string) (RiskSeverity, error) {
-	for index, description := range RiskSeverityTypeDescription {
-		if strings.EqualFold(value, description.Name) {
-			return RiskSeverity(index), nil
-		}
-	}
-
-	return RiskSeverity(0), fmt.Errorf("unknown risk severity value %q", value)
 }

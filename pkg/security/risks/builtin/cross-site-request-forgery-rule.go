@@ -10,9 +10,9 @@ func NewCrossSiteRequestForgeryRule() *CrossSiteRequestForgeryRule {
 	return &CrossSiteRequestForgeryRule{}
 }
 
-func (*CrossSiteRequestForgeryRule) Category() types.RiskCategory {
-	return types.RiskCategory{
-		Id:          "cross-site-request-forgery",
+func (*CrossSiteRequestForgeryRule) Category() *types.RiskCategory {
+	return &types.RiskCategory{
+		ID:          "cross-site-request-forgery",
 		Title:       "Cross-Site Request Forgery (CSRF)",
 		Description: "When a web application is accessed via web protocols Cross-Site Request Forgery (CSRF) risks might arise.",
 		Impact: "If this risk remains unmitigated, attackers might be able to trick logged-in victim users into unwanted actions within the web application " +
@@ -42,11 +42,11 @@ func (*CrossSiteRequestForgeryRule) SupportedTags() []string {
 	return []string{}
 }
 
-func (r *CrossSiteRequestForgeryRule) GenerateRisks(parsedModel *types.ParsedModel) []types.Risk {
-	risks := make([]types.Risk, 0)
+func (r *CrossSiteRequestForgeryRule) GenerateRisks(parsedModel *types.Model) ([]*types.Risk, error) {
+	risks := make([]*types.Risk, 0)
 	for _, id := range parsedModel.SortedTechnicalAssetIDs() {
 		technicalAsset := parsedModel.TechnicalAssets[id]
-		if technicalAsset.OutOfScope || !technicalAsset.Technology.IsWebApplication() {
+		if technicalAsset.OutOfScope || !technicalAsset.Technologies.GetAttribute(types.WebApplication) {
 			continue
 		}
 		incomingFlows := parsedModel.IncomingTechnicalCommunicationLinksMappedByTargetId[technicalAsset.Id]
@@ -60,18 +60,18 @@ func (r *CrossSiteRequestForgeryRule) GenerateRisks(parsedModel *types.ParsedMod
 			}
 		}
 	}
-	return risks
+	return risks, nil
 }
 
-func (r *CrossSiteRequestForgeryRule) createRisk(parsedModel *types.ParsedModel, technicalAsset types.TechnicalAsset, incomingFlow types.CommunicationLink, likelihood types.RiskExploitationLikelihood) types.Risk {
+func (r *CrossSiteRequestForgeryRule) createRisk(parsedModel *types.Model, technicalAsset *types.TechnicalAsset, incomingFlow *types.CommunicationLink, likelihood types.RiskExploitationLikelihood) *types.Risk {
 	sourceAsset := parsedModel.TechnicalAssets[incomingFlow.SourceId]
 	title := "<b>Cross-Site Request Forgery (CSRF)</b> risk at <b>" + technicalAsset.Title + "</b> via <b>" + incomingFlow.Title + "</b> from <b>" + sourceAsset.Title + "</b>"
 	impact := types.LowImpact
 	if incomingFlow.HighestIntegrity(parsedModel) == types.MissionCritical {
 		impact = types.MediumImpact
 	}
-	risk := types.Risk{
-		CategoryId:                      r.Category().Id,
+	risk := &types.Risk{
+		CategoryId:                      r.Category().ID,
 		Severity:                        types.CalculateSeverity(likelihood, impact),
 		ExploitationLikelihood:          likelihood,
 		ExploitationImpact:              impact,

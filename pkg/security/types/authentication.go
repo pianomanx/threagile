@@ -6,7 +6,6 @@ package types
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"gopkg.in/yaml.v3"
 	"strings"
@@ -47,13 +46,7 @@ var AuthenticationTypeDescription = [...]TypeDescription{
 }
 
 func ParseAuthentication(value string) (authentication Authentication, err error) {
-	value = strings.TrimSpace(value)
-	for _, candidate := range AuthenticationValues() {
-		if candidate.String() == value {
-			return candidate.(Authentication), err
-		}
-	}
-	return authentication, errors.New("Unable to parse into type: " + value)
+	return Authentication(0).Find(value)
 }
 
 func (what Authentication) String() string {
@@ -64,6 +57,16 @@ func (what Authentication) String() string {
 
 func (what Authentication) Explain() string {
 	return AuthenticationTypeDescription[what].Description
+}
+
+func (what Authentication) Find(value string) (Authentication, error) {
+	for index, description := range AuthenticationTypeDescription {
+		if strings.EqualFold(value, description.Name) {
+			return Authentication(index), nil
+		}
+	}
+
+	return Authentication(0), fmt.Errorf("unknown authentication value %q", value)
 }
 
 func (what Authentication) MarshalJSON() ([]byte, error) {
@@ -77,7 +80,7 @@ func (what *Authentication) UnmarshalJSON(data []byte) error {
 		return unmarshalError
 	}
 
-	value, findError := what.find(text)
+	value, findError := what.Find(text)
 	if findError != nil {
 		return findError
 	}
@@ -91,21 +94,11 @@ func (what Authentication) MarshalYAML() (interface{}, error) {
 }
 
 func (what *Authentication) UnmarshalYAML(node *yaml.Node) error {
-	value, findError := what.find(node.Value)
+	value, findError := what.Find(node.Value)
 	if findError != nil {
 		return findError
 	}
 
 	*what = value
 	return nil
-}
-
-func (what Authentication) find(value string) (Authentication, error) {
-	for index, description := range AuthenticationTypeDescription {
-		if strings.EqualFold(value, description.Name) {
-			return Authentication(index), nil
-		}
-	}
-
-	return Authentication(0), fmt.Errorf("unknown authentication value %q", value)
 }

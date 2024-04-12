@@ -36,7 +36,7 @@ func main() {
 
 	//	_ = os.WriteFile("raa_in.json", data, 0644)
 
-	var input types.ParsedModel
+	var input types.Model
 	parseError := json.Unmarshal(data, &input)
 	if parseError != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "failed to parse model: %v\n", parseError)
@@ -75,7 +75,7 @@ func closeFile(file io.Closer) {
 	_ = file.Close()
 }
 
-func CalculateRAA(input *types.ParsedModel) string {
+func CalculateRAA(input *types.Model) string {
 	for techAssetID, techAsset := range input.TechnicalAssets {
 		aa := calculateAttackerAttractiveness(input, techAsset)
 		aa += calculatePivotingNeighbourEffectAdjustment(input, techAsset)
@@ -95,7 +95,7 @@ func CalculateRAA(input *types.ParsedModel) string {
 var attackerAttractivenessMinimum, attackerAttractivenessMaximum, spread float64 = 0, 0, 0
 
 // set the concrete value in relation to the minimum and maximum of all
-func calculateRelativeAttackerAttractiveness(input *types.ParsedModel, attractiveness float64) float64 {
+func calculateRelativeAttackerAttractiveness(input *types.Model, attractiveness float64) float64 {
 	if attackerAttractivenessMinimum == 0 || attackerAttractivenessMaximum == 0 {
 		attackerAttractivenessMinimum, attackerAttractivenessMaximum = 9223372036854775807, -9223372036854775808
 		// determine (only one time required) the min/max of all
@@ -130,7 +130,7 @@ func calculateRelativeAttackerAttractiveness(input *types.ParsedModel, attractiv
 }
 
 // increase the RAA (relative attacker attractiveness) by one third (1/3) of the delta to the highest outgoing neighbour (if positive delta)
-func calculatePivotingNeighbourEffectAdjustment(input *types.ParsedModel, techAsset types.TechnicalAsset) float64 {
+func calculatePivotingNeighbourEffectAdjustment(input *types.Model, techAsset *types.TechnicalAsset) float64 {
 	if techAsset.OutOfScope {
 		return 0
 	}
@@ -141,7 +141,7 @@ func calculatePivotingNeighbourEffectAdjustment(input *types.ParsedModel, techAs
 		delta := calculateRelativeAttackerAttractiveness(input, calculateAttackerAttractiveness(input, outgoingNeighbour)) - calculateRelativeAttackerAttractiveness(input, calculateAttackerAttractiveness(input, techAsset))
 		if delta > 0 {
 			potentialIncrease := delta / 3
-			//fmt.Println("Positive delta from", techAsset.Id, "to", outgoingNeighbour.Id, "is", delta, "yields to pivoting neighbour effect of an increase of", potentialIncrease)
+			//fmt.Println("Positive delta from", techAsset.ID, "to", outgoingNeighbour.ID, "is", delta, "yields to pivoting neighbour effect of an increase of", potentialIncrease)
 			if potentialIncrease > adjustment {
 				adjustment = potentialIncrease
 			}
@@ -153,7 +153,7 @@ func calculatePivotingNeighbourEffectAdjustment(input *types.ParsedModel, techAs
 
 // The sum of all CIAs of the asset itself (fibonacci scale) plus the sum of the comm-links' transferred CIAs
 // Multiplied by the quantity values of the data asset for C and I (not A)
-func calculateAttackerAttractiveness(input *types.ParsedModel, techAsset types.TechnicalAsset) float64 {
+func calculateAttackerAttractiveness(input *types.Model, techAsset *types.TechnicalAsset) float64 {
 	if techAsset.OutOfScope {
 		return 0
 	}
@@ -182,6 +182,7 @@ func calculateAttackerAttractiveness(input *types.ParsedModel, techAsset types.T
 			score += dataAsset.Integrity.AttackerAttractivenessForInOutTransferredData() * dataAsset.Quantity.QuantityFactor()
 			score += dataAsset.Availability.AttackerAttractivenessForInOutTransferredData()
 		}
+
 		for _, dataAssetReceived := range dataFlow.DataAssetsReceived {
 			dataAsset := input.DataAssets[dataAssetReceived]
 			score += dataAsset.Confidentiality.AttackerAttractivenessForInOutTransferredData() * dataAsset.Quantity.QuantityFactor()
@@ -189,28 +190,26 @@ func calculateAttackerAttractiveness(input *types.ParsedModel, techAsset types.T
 			score += dataAsset.Availability.AttackerAttractivenessForInOutTransferredData()
 		}
 	}
-	if techAsset.Technology == types.LoadBalancer || techAsset.Technology == types.ReverseProxy {
+
+	if techAsset.Technologies.GetAttribute(types.LoadBalancer, types.ReverseProxy) {
 		score = score / 5.5
-	}
-	if techAsset.Technology == types.Monitoring {
+	} else if techAsset.Technologies.GetAttribute(types.Monitoring) {
 		score = score / 5
-	}
-	if techAsset.Technology == types.ContainerPlatform {
+	} else if techAsset.Technologies.GetAttribute(types.ContainerPlatform) {
 		score = score * 5
-	}
-	if techAsset.Technology == types.Vault {
+	} else if techAsset.Technologies.GetAttribute(types.Vault) {
 		score = score * 2
-	}
-	if techAsset.Technology == types.BuildPipeline || techAsset.Technology == types.SourcecodeRepository || techAsset.Technology == types.ArtifactRegistry {
+	} else if techAsset.Technologies.GetAttribute(types.BuildPipeline, types.SourcecodeRepository, types.ArtifactRegistry) {
 		score = score * 2
-	}
-	if techAsset.Technology == types.IdentityProvider || techAsset.Technology == types.IdentityStoreDatabase || techAsset.Technology == types.IdentityStoreLDAP {
+	} else if techAsset.Technologies.GetAttribute(types.IdentityProvider, types.IdentityStoreDatabase, types.IdentityStoreLDAP) {
 		score = score * 2.5
 	} else if techAsset.Type == types.Datastore {
 		score = score * 2
 	}
+
 	if techAsset.MultiTenant {
 		score = score * 1.5
 	}
+
 	return score
 }

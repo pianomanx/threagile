@@ -10,9 +10,9 @@ func NewMissingBuildInfrastructureRule() *MissingBuildInfrastructureRule {
 	return &MissingBuildInfrastructureRule{}
 }
 
-func (*MissingBuildInfrastructureRule) Category() types.RiskCategory {
-	return types.RiskCategory{
-		Id:    "missing-build-infrastructure",
+func (*MissingBuildInfrastructureRule) Category() *types.RiskCategory {
+	return &types.RiskCategory{
+		ID:    "missing-build-infrastructure",
 		Title: "Missing Build Infrastructure",
 		Description: "The modeled architecture does not contain a build infrastructure (devops-client, sourcecode-repo, build-pipeline, etc.), " +
 			"which might be the risk of a model missing critical assets (and thus not seeing their risks). " +
@@ -41,20 +41,20 @@ func (*MissingBuildInfrastructureRule) SupportedTags() []string {
 	return []string{}
 }
 
-func (r *MissingBuildInfrastructureRule) GenerateRisks(input *types.ParsedModel) []types.Risk {
-	risks := make([]types.Risk, 0)
+func (r *MissingBuildInfrastructureRule) GenerateRisks(input *types.Model) ([]*types.Risk, error) {
+	risks := make([]*types.Risk, 0)
 	hasCustomDevelopedParts, hasBuildPipeline, hasSourcecodeRepo, hasDevOpsClient := false, false, false, false
 	impact := types.LowImpact
-	var mostRelevantAsset types.TechnicalAsset
+	var mostRelevantAsset *types.TechnicalAsset
 	for _, id := range input.SortedTechnicalAssetIDs() { // use the sorted one to always get the same tech asset with the highest sensitivity as example asset
 		technicalAsset := input.TechnicalAssets[id]
 		if technicalAsset.CustomDevelopedParts && !technicalAsset.OutOfScope {
 			hasCustomDevelopedParts = true
 			if impact == types.LowImpact {
 				mostRelevantAsset = technicalAsset
-				if technicalAsset.HighestConfidentiality(input) >= types.Confidential ||
-					technicalAsset.HighestIntegrity(input) >= types.Critical ||
-					technicalAsset.HighestAvailability(input) >= types.Critical {
+				if technicalAsset.HighestProcessedConfidentiality(input) >= types.Confidential ||
+					technicalAsset.HighestProcessedIntegrity(input) >= types.Critical ||
+					technicalAsset.HighestProcessedAvailability(input) >= types.Critical {
 					impact = types.MediumImpact
 				}
 			}
@@ -68,13 +68,13 @@ func (r *MissingBuildInfrastructureRule) GenerateRisks(input *types.ParsedModel)
 				mostRelevantAsset = technicalAsset
 			}
 		}
-		if technicalAsset.Technology == types.BuildPipeline {
+		if technicalAsset.Technologies.GetAttribute(types.BuildPipeline) {
 			hasBuildPipeline = true
 		}
-		if technicalAsset.Technology == types.SourcecodeRepository {
+		if technicalAsset.Technologies.GetAttribute(types.SourcecodeRepository) {
 			hasSourcecodeRepo = true
 		}
-		if technicalAsset.Technology == types.DevOpsClient {
+		if technicalAsset.Technologies.GetAttribute(types.DevOpsClient) {
 			hasDevOpsClient = true
 		}
 	}
@@ -82,13 +82,13 @@ func (r *MissingBuildInfrastructureRule) GenerateRisks(input *types.ParsedModel)
 	if hasCustomDevelopedParts && !hasBuildInfrastructure {
 		risks = append(risks, r.createRisk(mostRelevantAsset, impact))
 	}
-	return risks
+	return risks, nil
 }
 
-func (r *MissingBuildInfrastructureRule) createRisk(technicalAsset types.TechnicalAsset, impact types.RiskExploitationImpact) types.Risk {
+func (r *MissingBuildInfrastructureRule) createRisk(technicalAsset *types.TechnicalAsset, impact types.RiskExploitationImpact) *types.Risk {
 	title := "<b>Missing Build Infrastructure</b> in the threat model (referencing asset <b>" + technicalAsset.Title + "</b> as an example)"
-	risk := types.Risk{
-		CategoryId:                   r.Category().Id,
+	risk := &types.Risk{
+		CategoryId:                   r.Category().ID,
 		Severity:                     types.CalculateSeverity(types.Unlikely, impact),
 		ExploitationLikelihood:       types.Unlikely,
 		ExploitationImpact:           impact,

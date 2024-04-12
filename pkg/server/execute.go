@@ -1,10 +1,10 @@
 /*
 Copyright © 2023 NAME HERE <EMAIL ADDRESS>
 */
+
 package server
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -108,7 +108,7 @@ func (s *server) execute(ginContext *gin.Context, dryRun bool) (yamlContent []by
 			}
 		}
 		if !found {
-			panic(errors.New("no yaml file found in uploaded archive"))
+			panic(fmt.Errorf("no yaml file found in uploaded archive"))
 		}
 	}
 
@@ -179,7 +179,7 @@ func (s *server) doItViaRuntimeCall(modelFile string, outputDir string,
 	dpi int) {
 	// Remember to also add the same args to the exec based sub-process calls!
 	var cmd *exec.Cmd
-	args := []string{"-model", modelFile, "-output", outputDir, "-execute-model-macro", s.config.ExecuteModelMacro, "-raa-run", s.config.RAAPlugin, "-custom-risk-rules-plugins", strings.Join(s.config.RiskRulesPlugins, ","), "-skip-risk-rules", s.config.SkipRiskRules, "-diagram-dpi", strconv.Itoa(dpi)}
+	args := []string{"-model", modelFile, "-output", outputDir, "-execute-model-macro", s.config.ExecuteModelMacro, "-raa-run", s.config.RAAPlugin, "-custom-risk-rules-plugins", strings.Join(s.config.RiskRulesPlugins, ","), "-skip-risk-rules", strings.Join(s.config.SkipRiskRules, ","), "-diagram-dpi", strconv.Itoa(dpi)}
 	if s.config.Verbose {
 		args = append(args, "-verbose")
 	}
@@ -218,7 +218,7 @@ func (s *server) doItViaRuntimeCall(modelFile string, outputDir string,
 	cmd = exec.Command(self, args...) // #nosec G204
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		panic(errors.New(string(out)))
+		panic(fmt.Errorf(string(out)))
 	} else {
 		if s.config.Verbose && len(out) > 0 {
 			fmt.Println("---")

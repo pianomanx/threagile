@@ -10,9 +10,9 @@ func NewContainerPlatformEscapeRule() *ContainerPlatformEscapeRule {
 	return &ContainerPlatformEscapeRule{}
 }
 
-func (*ContainerPlatformEscapeRule) Category() types.RiskCategory {
-	return types.RiskCategory{
-		Id:    "container-platform-escape",
+func (*ContainerPlatformEscapeRule) Category() *types.RiskCategory {
+	return &types.RiskCategory{
+		ID:    "container-platform-escape",
 		Title: "Container Platform Escape",
 		Description: "Container platforms are especially interesting targets for attackers as they host big parts of a containerized runtime infrastructure. " +
 			"When not configured and operated with security best practices in mind, attackers might exploit a vulnerability inside an container and escape towards " +
@@ -46,23 +46,23 @@ func (*ContainerPlatformEscapeRule) SupportedTags() []string {
 	return []string{"docker", "kubernetes", "openshift"}
 }
 
-func (r *ContainerPlatformEscapeRule) GenerateRisks(parsedModel *types.ParsedModel) []types.Risk {
-	risks := make([]types.Risk, 0)
+func (r *ContainerPlatformEscapeRule) GenerateRisks(parsedModel *types.Model) ([]*types.Risk, error) {
+	risks := make([]*types.Risk, 0)
 	for _, id := range parsedModel.SortedTechnicalAssetIDs() {
 		technicalAsset := parsedModel.TechnicalAssets[id]
-		if !technicalAsset.OutOfScope && technicalAsset.Technology == types.ContainerPlatform {
+		if !technicalAsset.OutOfScope && technicalAsset.Technologies.GetAttribute(types.ContainerPlatform) {
 			risks = append(risks, r.createRisk(parsedModel, technicalAsset))
 		}
 	}
-	return risks
+	return risks, nil
 }
 
-func (r *ContainerPlatformEscapeRule) createRisk(parsedModel *types.ParsedModel, technicalAsset types.TechnicalAsset) types.Risk {
+func (r *ContainerPlatformEscapeRule) createRisk(parsedModel *types.Model, technicalAsset *types.TechnicalAsset) *types.Risk {
 	title := "<b>Container Platform Escape</b> risk at <b>" + technicalAsset.Title + "</b>"
 	impact := types.MediumImpact
-	if technicalAsset.HighestConfidentiality(parsedModel) == types.StrictlyConfidential ||
-		technicalAsset.HighestIntegrity(parsedModel) == types.MissionCritical ||
-		technicalAsset.HighestAvailability(parsedModel) == types.MissionCritical {
+	if technicalAsset.HighestProcessedConfidentiality(parsedModel) == types.StrictlyConfidential ||
+		technicalAsset.HighestProcessedIntegrity(parsedModel) == types.MissionCritical ||
+		technicalAsset.HighestProcessedAvailability(parsedModel) == types.MissionCritical {
 		impact = types.HighImpact
 	}
 	// data breach at all container assets
@@ -73,8 +73,8 @@ func (r *ContainerPlatformEscapeRule) createRisk(parsedModel *types.ParsedModel,
 		}
 	}
 	// create risk
-	risk := types.Risk{
-		CategoryId:                   r.Category().Id,
+	risk := &types.Risk{
+		CategoryId:                   r.Category().ID,
 		Severity:                     types.CalculateSeverity(types.Unlikely, impact),
 		ExploitationLikelihood:       types.Unlikely,
 		ExploitationImpact:           impact,

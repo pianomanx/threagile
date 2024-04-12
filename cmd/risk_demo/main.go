@@ -16,8 +16,6 @@ type customRiskRule string
 
 // exported as symbol (here simply as variable to interface to bundle many functions under one symbol) named "RiskRule"
 
-var CustomRiskRule customRiskRule
-
 func main() {
 	getInfo := flag.Bool("get-info", false, "get rule info")
 	generateRisks := flag.Bool("generate-risks", false, "generate risks")
@@ -25,12 +23,7 @@ func main() {
 
 	if *getInfo {
 		rule := new(customRiskRule)
-		category := rule.Category()
-		riskData, marshalError := json.Marshal(model.CustomRisk{
-			ID:       category.Id,
-			Category: category,
-			Tags:     rule.SupportedTags(),
-		})
+		riskData, marshalError := json.Marshal(new(model.CustomRiskCategory).Init(rule.Category(), rule.SupportedTags()))
 
 		if marshalError != nil {
 			_, _ = fmt.Fprintf(os.Stderr, "failed to print risk data: %v", marshalError)
@@ -49,14 +42,19 @@ func main() {
 			os.Exit(-2)
 		}
 
-		var input types.ParsedModel
+		var input types.Model
 		inError := json.Unmarshal(inData, &input)
 		if inError != nil {
 			_, _ = fmt.Fprintf(os.Stderr, "failed to parse model: %v\n", inError)
 			os.Exit(-2)
 		}
 
-		generatedRisks := new(customRiskRule).GenerateRisks(&input)
+		generatedRisks, riskError := new(customRiskRule).GenerateRisks(&input)
+		if riskError != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "failed to generate risks: %v\n", riskError)
+			os.Exit(-2)
+		}
+
 		outData, marshalError := json.Marshal(generatedRisks)
 		if marshalError != nil {
 			_, _ = fmt.Fprintf(os.Stderr, "failed to print generated risks: %v\n", marshalError)
@@ -71,9 +69,9 @@ func main() {
 	os.Exit(-2)
 }
 
-func (r customRiskRule) Category() types.RiskCategory {
-	return types.RiskCategory{
-		Id:                         "demo",
+func (r customRiskRule) Category() *types.RiskCategory {
+	return &types.RiskCategory{
+		ID:                         "demo",
 		Title:                      "Just a Demo",
 		Description:                "Demo Description",
 		Impact:                     "Demo Impact",
@@ -96,17 +94,18 @@ func (r customRiskRule) SupportedTags() []string {
 	return []string{"demo tag"}
 }
 
-func (r customRiskRule) GenerateRisks(parsedModel *types.ParsedModel) []types.Risk {
-	generatedRisks := make([]types.Risk, 0)
+func (r customRiskRule) GenerateRisks(parsedModel *types.Model) ([]*types.Risk, error) {
+	generatedRisks := make([]*types.Risk, 0)
 	for _, techAsset := range parsedModel.TechnicalAssets {
 		generatedRisks = append(generatedRisks, createRisk(techAsset))
 	}
-	return generatedRisks
+	return generatedRisks, nil
 }
 
-func createRisk(technicalAsset types.TechnicalAsset) types.Risk {
-	risk := types.Risk{
-		CategoryId:                   CustomRiskRule.Category().Id,
+func createRisk(technicalAsset *types.TechnicalAsset) *types.Risk {
+	category := new(customRiskRule).Category()
+	risk := &types.Risk{
+		CategoryId:                   category.ID,
 		Severity:                     types.CalculateSeverity(types.VeryLikely, types.MediumImpact),
 		ExploitationLikelihood:       types.VeryLikely,
 		ExploitationImpact:           types.MediumImpact,

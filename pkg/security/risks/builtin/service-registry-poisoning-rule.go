@@ -10,9 +10,9 @@ func NewServiceRegistryPoisoningRule() *ServiceRegistryPoisoningRule {
 	return &ServiceRegistryPoisoningRule{}
 }
 
-func (*ServiceRegistryPoisoningRule) Category() types.RiskCategory {
-	return types.RiskCategory{
-		Id:          "service-registry-poisoning",
+func (*ServiceRegistryPoisoningRule) Category() *types.RiskCategory {
+	return &types.RiskCategory{
+		ID:          "service-registry-poisoning",
 		Title:       "Service Registry Poisoning",
 		Description: "When a service registry used for discovery of trusted service endpoints Service Registry Poisoning risks might arise.",
 		Impact: "If this risk remains unmitigated, attackers might be able to poison the service registry with malicious service endpoints or " +
@@ -38,34 +38,34 @@ func (*ServiceRegistryPoisoningRule) SupportedTags() []string {
 	return []string{}
 }
 
-func (r *ServiceRegistryPoisoningRule) GenerateRisks(input *types.ParsedModel) []types.Risk {
-	risks := make([]types.Risk, 0)
+func (r *ServiceRegistryPoisoningRule) GenerateRisks(input *types.Model) ([]*types.Risk, error) {
+	risks := make([]*types.Risk, 0)
 	for _, id := range input.SortedTechnicalAssetIDs() {
 		technicalAsset := input.TechnicalAssets[id]
-		if !technicalAsset.OutOfScope && technicalAsset.Technology == types.ServiceRegistry {
+		if !technicalAsset.OutOfScope && technicalAsset.Technologies.GetAttribute(types.ServiceRegistry) {
 			incomingFlows := input.IncomingTechnicalCommunicationLinksMappedByTargetId[technicalAsset.Id]
 			risks = append(risks, r.createRisk(input, technicalAsset, incomingFlows))
 		}
 	}
-	return risks
+	return risks, nil
 }
 
-func (r *ServiceRegistryPoisoningRule) createRisk(input *types.ParsedModel, technicalAsset types.TechnicalAsset, incomingFlows []types.CommunicationLink) types.Risk {
+func (r *ServiceRegistryPoisoningRule) createRisk(input *types.Model, technicalAsset *types.TechnicalAsset, incomingFlows []*types.CommunicationLink) *types.Risk {
 	title := "<b>Service Registry Poisoning</b> risk at <b>" + technicalAsset.Title + "</b>"
 	impact := types.LowImpact
 
 	for _, incomingFlow := range incomingFlows {
 		caller := input.TechnicalAssets[incomingFlow.SourceId]
-		if technicalAsset.HighestConfidentiality(input) == types.StrictlyConfidential || technicalAsset.HighestIntegrity(input) == types.MissionCritical || technicalAsset.HighestAvailability(input) == types.MissionCritical ||
-			caller.HighestConfidentiality(input) == types.StrictlyConfidential || caller.HighestIntegrity(input) == types.MissionCritical || caller.HighestAvailability(input) == types.MissionCritical ||
+		if technicalAsset.HighestProcessedConfidentiality(input) == types.StrictlyConfidential || technicalAsset.HighestProcessedIntegrity(input) == types.MissionCritical || technicalAsset.HighestProcessedAvailability(input) == types.MissionCritical ||
+			caller.HighestProcessedConfidentiality(input) == types.StrictlyConfidential || caller.HighestProcessedIntegrity(input) == types.MissionCritical || caller.HighestProcessedAvailability(input) == types.MissionCritical ||
 			incomingFlow.HighestConfidentiality(input) == types.StrictlyConfidential || incomingFlow.HighestIntegrity(input) == types.MissionCritical || incomingFlow.HighestAvailability(input) == types.MissionCritical {
 			impact = types.MediumImpact
 			break
 		}
 	}
 
-	risk := types.Risk{
-		CategoryId:                   r.Category().Id,
+	risk := &types.Risk{
+		CategoryId:                   r.Category().ID,
 		Severity:                     types.CalculateSeverity(types.Unlikely, impact),
 		ExploitationLikelihood:       types.Unlikely,
 		ExploitationImpact:           impact,

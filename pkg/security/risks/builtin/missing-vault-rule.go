@@ -10,9 +10,9 @@ func NewMissingVaultRule() *MissingVaultRule {
 	return &MissingVaultRule{}
 }
 
-func (*MissingVaultRule) Category() types.RiskCategory {
-	return types.RiskCategory{
-		Id:    "missing-vault",
+func (*MissingVaultRule) Category() *types.RiskCategory {
+	return &types.RiskCategory{
+		ID:    "missing-vault",
 		Title: "Missing Vault (Secret Storage)",
 		Description: "In order to avoid the risk of secret leakage via config files (when attacked through vulnerabilities being able to " +
 			"read files like Path-Traversal and others), it is best practice to use a separate hardened process with proper authentication, " +
@@ -24,7 +24,7 @@ func (*MissingVaultRule) Category() types.RiskCategory {
 		CheatSheet:     "https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html",
 		Action:         "Vault (Secret Storage)",
 		Mitigation:     "Consider using a Vault (Secret Storage) to securely store and access config secrets (like credentials, private keys, client certificates, etc.).",
-		Check:          "Is a Vault (Secret Storage) in place?",
+		Check:          "GetAttribute a Vault (Secret Storage) in place?",
 		Function:       types.Architecture,
 		STRIDE:         types.InformationDisclosure,
 		DetectionLogic: "Models without a Vault (Secret Storage).",
@@ -40,19 +40,19 @@ func (*MissingVaultRule) SupportedTags() []string {
 	return []string{}
 }
 
-func (r *MissingVaultRule) GenerateRisks(input *types.ParsedModel) []types.Risk {
-	risks := make([]types.Risk, 0)
+func (r *MissingVaultRule) GenerateRisks(input *types.Model) ([]*types.Risk, error) {
+	risks := make([]*types.Risk, 0)
 	hasVault := false
-	var mostRelevantAsset types.TechnicalAsset
+	var mostRelevantAsset *types.TechnicalAsset
 	impact := types.LowImpact
 	for _, id := range input.SortedTechnicalAssetIDs() { // use the sorted one to always get the same tech asset with the highest sensitivity as example asset
 		techAsset := input.TechnicalAssets[id]
-		if techAsset.Technology == types.Vault {
+		if techAsset.Technologies.GetAttribute(types.Vault) {
 			hasVault = true
 		}
-		if techAsset.HighestConfidentiality(input) >= types.Confidential ||
-			techAsset.HighestIntegrity(input) >= types.Critical ||
-			techAsset.HighestAvailability(input) >= types.Critical {
+		if techAsset.HighestProcessedConfidentiality(input) >= types.Confidential ||
+			techAsset.HighestProcessedIntegrity(input) >= types.Critical ||
+			techAsset.HighestProcessedAvailability(input) >= types.Critical {
 			impact = types.MediumImpact
 		}
 		if techAsset.Confidentiality >= types.Confidential ||
@@ -61,20 +61,23 @@ func (r *MissingVaultRule) GenerateRisks(input *types.ParsedModel) []types.Risk 
 			impact = types.MediumImpact
 		}
 		// just for referencing the most interesting asset
-		if techAsset.HighestSensitivityScore() > mostRelevantAsset.HighestSensitivityScore() {
+		if mostRelevantAsset == nil || techAsset.HighestSensitivityScore() > mostRelevantAsset.HighestSensitivityScore() {
 			mostRelevantAsset = techAsset
 		}
 	}
 	if !hasVault {
 		risks = append(risks, r.createRisk(mostRelevantAsset, impact))
 	}
-	return risks
+	return risks, nil
 }
 
-func (r *MissingVaultRule) createRisk(technicalAsset types.TechnicalAsset, impact types.RiskExploitationImpact) types.Risk {
-	title := "<b>Missing Vault (Secret Storage)</b> in the threat model (referencing asset <b>" + technicalAsset.Title + "</b> as an example)"
-	risk := types.Risk{
-		CategoryId:                   r.Category().Id,
+func (r *MissingVaultRule) createRisk(technicalAsset *types.TechnicalAsset, impact types.RiskExploitationImpact) *types.Risk {
+	title := "<b>Missing Vault (Secret Storage)</b> in the threat model"
+	if technicalAsset != nil {
+		title += " (referencing asset <b>" + technicalAsset.Title + "</b> as an example)"
+	}
+	risk := &types.Risk{
+		CategoryId:                   r.Category().ID,
 		Severity:                     types.CalculateSeverity(types.Unlikely, impact),
 		ExploitationLikelihood:       types.Unlikely,
 		ExploitationImpact:           impact,

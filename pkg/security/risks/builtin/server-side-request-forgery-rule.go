@@ -10,9 +10,9 @@ func NewServerSideRequestForgeryRule() *ServerSideRequestForgeryRule {
 	return &ServerSideRequestForgeryRule{}
 }
 
-func (*ServerSideRequestForgeryRule) Category() types.RiskCategory {
-	return types.RiskCategory{
-		Id:    "server-side-request-forgery",
+func (*ServerSideRequestForgeryRule) Category() *types.RiskCategory {
+	return &types.RiskCategory{
+		ID:    "server-side-request-forgery",
 		Title: "Server-Side Request Forgery (SSRF)",
 		Description: "When a server system (i.e. not a client) is accessing other server systems via typical web protocols " +
 			"Server-Side Request Forgery (SSRF) or Local-File-Inclusion (LFI) or Remote-File-Inclusion (RFI) risks might arise. ",
@@ -41,11 +41,11 @@ func (*ServerSideRequestForgeryRule) SupportedTags() []string {
 	return []string{}
 }
 
-func (r *ServerSideRequestForgeryRule) GenerateRisks(input *types.ParsedModel) []types.Risk {
-	risks := make([]types.Risk, 0)
+func (r *ServerSideRequestForgeryRule) GenerateRisks(input *types.Model) ([]*types.Risk, error) {
+	risks := make([]*types.Risk, 0)
 	for _, id := range input.SortedTechnicalAssetIDs() {
 		technicalAsset := input.TechnicalAssets[id]
-		if technicalAsset.OutOfScope || technicalAsset.Technology.IsClient() || technicalAsset.Technology == types.LoadBalancer {
+		if technicalAsset.OutOfScope || technicalAsset.Technologies.GetAttribute(types.IsClient) || technicalAsset.Technologies.GetAttribute(types.LoadBalancer) {
 			continue
 		}
 		for _, outgoingFlow := range technicalAsset.CommunicationLinks {
@@ -54,16 +54,16 @@ func (r *ServerSideRequestForgeryRule) GenerateRisks(input *types.ParsedModel) [
 			}
 		}
 	}
-	return risks
+	return risks, nil
 }
 
-func (r *ServerSideRequestForgeryRule) createRisk(input *types.ParsedModel, technicalAsset types.TechnicalAsset, outgoingFlow types.CommunicationLink) types.Risk {
+func (r *ServerSideRequestForgeryRule) createRisk(input *types.Model, technicalAsset *types.TechnicalAsset, outgoingFlow *types.CommunicationLink) *types.Risk {
 	target := input.TechnicalAssets[outgoingFlow.TargetId]
 	title := "<b>Server-Side Request Forgery (SSRF)</b> risk at <b>" + technicalAsset.Title + "</b> server-side web-requesting " +
 		"the target <b>" + target.Title + "</b> via <b>" + outgoingFlow.Title + "</b>"
 	impact := types.LowImpact
 	// check by the target itself (can be in another trust-boundary)
-	if target.HighestConfidentiality(input) == types.StrictlyConfidential {
+	if target.HighestProcessedConfidentiality(input) == types.StrictlyConfidential {
 		impact = types.MediumImpact
 	}
 	// check all potential attack targets within the same trust boundary (accessible via web protocols)
@@ -74,7 +74,7 @@ func (r *ServerSideRequestForgeryRule) createRisk(input *types.ParsedModel, tech
 			for _, commLinkIncoming := range input.IncomingTechnicalCommunicationLinksMappedByTargetId[potentialTargetAsset.Id] {
 				if commLinkIncoming.Protocol.IsPotentialWebAccessProtocol() {
 					uniqueDataBreachTechnicalAssetIDs[potentialTargetAsset.Id] = true
-					if potentialTargetAsset.HighestConfidentiality(input) == types.StrictlyConfidential {
+					if potentialTargetAsset.HighestProcessedConfidentiality(input) == types.StrictlyConfidential {
 						impact = types.MediumImpact
 					}
 				}
@@ -93,8 +93,8 @@ func (r *ServerSideRequestForgeryRule) createRisk(input *types.ParsedModel, tech
 	if outgoingFlow.Usage == types.DevOps {
 		likelihood = types.Unlikely
 	}
-	risk := types.Risk{
-		CategoryId:                      r.Category().Id,
+	risk := &types.Risk{
+		CategoryId:                      r.Category().ID,
 		Severity:                        types.CalculateSeverity(likelihood, impact),
 		ExploitationLikelihood:          likelihood,
 		ExploitationImpact:              impact,

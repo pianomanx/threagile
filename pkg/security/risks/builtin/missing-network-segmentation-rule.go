@@ -14,9 +14,9 @@ func NewMissingNetworkSegmentationRule() *MissingNetworkSegmentationRule {
 	return &MissingNetworkSegmentationRule{raaLimit: 50}
 }
 
-func (*MissingNetworkSegmentationRule) Category() types.RiskCategory {
-	return types.RiskCategory{
-		Id:    "missing-network-segmentation",
+func (*MissingNetworkSegmentationRule) Category() *types.RiskCategory {
+	return &types.RiskCategory{
+		ID:    "missing-network-segmentation",
 		Title: "Missing Network Segmentation",
 		Description: "Highly sensitive assets and/or data stores residing in the same network segment than other " +
 			"lower sensitive assets (like webservers or content management systems etc.) should be better protected " +
@@ -31,9 +31,9 @@ func (*MissingNetworkSegmentationRule) Category() types.RiskCategory {
 		Function:   types.Operations,
 		STRIDE:     types.ElevationOfPrivilege,
 		DetectionLogic: "In-scope technical assets with high sensitivity and RAA values as well as data stores " +
-			"when surrounded by assets (without a network trust-boundary in-between) which are of type " + types.ClientSystem.String() + ", " +
-			types.WebServer.String() + ", " + types.WebApplication.String() + ", " + types.CMS.String() + ", " + types.WebServiceREST.String() + ", " + types.WebServiceSOAP.String() + ", " +
-			types.BuildPipeline.String() + ", " + types.SourcecodeRepository.String() + ", " + types.Monitoring.String() + ", or similar and there is no direct connection between these " +
+			"when surrounded by assets (without a network trust-boundary in-between) which are of type " + types.ClientSystem + ", " +
+			types.WebServer + ", " + types.WebApplication + ", " + types.CMS + ", " + types.WebServiceREST + ", " + types.WebServiceSOAP + ", " +
+			types.BuildPipeline + ", " + types.SourcecodeRepository + ", " + types.Monitoring + ", or similar and there is no direct connection between these " +
 			"(hence no requirement to be so close to each other).",
 		RiskAssessment: "Default is " + types.LowSeverity.String() + " risk. The risk is increased to " + types.MediumSeverity.String() + " when the asset missing the " +
 			"trust-boundary protection is rated as " + types.StrictlyConfidential.String() + " or " + types.MissionCritical.String() + ".",
@@ -48,8 +48,8 @@ func (*MissingNetworkSegmentationRule) SupportedTags() []string {
 	return []string{}
 }
 
-func (r *MissingNetworkSegmentationRule) GenerateRisks(input *types.ParsedModel) []types.Risk {
-	risks := make([]types.Risk, 0)
+func (r *MissingNetworkSegmentationRule) GenerateRisks(input *types.Model) ([]*types.Risk, error) {
+	risks := make([]*types.Risk, 0)
 	// first create them in memory (see the link replacement below for nested trust boundaries) - otherwise in Go ranging over map is random order
 	// range over them in sorted (hence re-producible) way:
 	keys := make([]string, 0)
@@ -59,37 +59,46 @@ func (r *MissingNetworkSegmentationRule) GenerateRisks(input *types.ParsedModel)
 	sort.Strings(keys)
 	for _, key := range keys {
 		technicalAsset := input.TechnicalAssets[key]
-		if !technicalAsset.OutOfScope && technicalAsset.Technology != types.ReverseProxy && technicalAsset.Technology != types.WAF && technicalAsset.Technology != types.IDS && technicalAsset.Technology != types.IPS && technicalAsset.Technology != types.ServiceRegistry {
-			if technicalAsset.RAA >= float64(r.raaLimit) && (technicalAsset.Type == types.Datastore || technicalAsset.Confidentiality >= types.Confidential ||
-				technicalAsset.Integrity >= types.Critical || technicalAsset.Availability >= types.Critical) {
-				// now check for any other same-network assets of certain types which have no direct connection
-				for _, sparringAssetCandidateId := range keys { // so inner loop again over all assets
-					if technicalAsset.Id != sparringAssetCandidateId {
-						sparringAssetCandidate := input.TechnicalAssets[sparringAssetCandidateId]
-						if sparringAssetCandidate.Technology.IsLessProtectedType() &&
-							technicalAsset.IsSameTrustBoundaryNetworkOnly(input, sparringAssetCandidateId) &&
-							!technicalAsset.HasDirectConnection(input, sparringAssetCandidateId) &&
-							!sparringAssetCandidate.Technology.IsCloseToHighValueTargetsTolerated() {
-							highRisk := technicalAsset.Confidentiality == types.StrictlyConfidential ||
-								technicalAsset.Integrity == types.MissionCritical || technicalAsset.Availability == types.MissionCritical
-							risks = append(risks, r.createRisk(technicalAsset, highRisk))
-							break
-						}
+		if technicalAsset.OutOfScope {
+			continue
+		}
+
+		if !technicalAsset.Technologies.GetAttribute(types.IsNoNetworkSegmentationRequired) {
+			continue
+		}
+
+		if technicalAsset.RAA < float64(r.raaLimit) {
+			continue
+		}
+
+		if technicalAsset.Type == types.Datastore || technicalAsset.Confidentiality >= types.Confidential || technicalAsset.Integrity >= types.Critical || technicalAsset.Availability >= types.Critical {
+			// now check for any other same-network assets of certain types which have no direct connection
+			for _, sparringAssetCandidateId := range keys { // so inner loop again over all assets
+				if technicalAsset.Id != sparringAssetCandidateId {
+					sparringAssetCandidate := input.TechnicalAssets[sparringAssetCandidateId]
+					if sparringAssetCandidate.Technologies.GetAttribute(types.IsLessProtectedType) &&
+						technicalAsset.IsSameTrustBoundaryNetworkOnly(input, sparringAssetCandidateId) &&
+						!technicalAsset.HasDirectConnection(input, sparringAssetCandidateId) &&
+						!sparringAssetCandidate.Technologies.GetAttribute(types.IsCloseToHighValueTargetsTolerated) {
+						highRisk := technicalAsset.Confidentiality == types.StrictlyConfidential ||
+							technicalAsset.Integrity == types.MissionCritical || technicalAsset.Availability == types.MissionCritical
+						risks = append(risks, r.createRisk(technicalAsset, highRisk))
+						break
 					}
 				}
 			}
 		}
 	}
-	return risks
+	return risks, nil
 }
 
-func (r *MissingNetworkSegmentationRule) createRisk(techAsset types.TechnicalAsset, moreRisky bool) types.Risk {
+func (r *MissingNetworkSegmentationRule) createRisk(techAsset *types.TechnicalAsset, moreRisky bool) *types.Risk {
 	impact := types.LowImpact
 	if moreRisky {
 		impact = types.MediumImpact
 	}
-	risk := types.Risk{
-		CategoryId:             r.Category().Id,
+	risk := &types.Risk{
+		CategoryId:             r.Category().ID,
 		Severity:               types.CalculateSeverity(types.Unlikely, impact),
 		ExploitationLikelihood: types.Unlikely,
 		ExploitationImpact:     impact,

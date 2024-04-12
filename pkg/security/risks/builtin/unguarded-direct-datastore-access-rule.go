@@ -10,9 +10,9 @@ func NewUnguardedDirectDatastoreAccessRule() *UnguardedDirectDatastoreAccessRule
 	return &UnguardedDirectDatastoreAccessRule{}
 }
 
-func (*UnguardedDirectDatastoreAccessRule) Category() types.RiskCategory {
-	return types.RiskCategory{
-		Id:          "unguarded-direct-datastore-access",
+func (*UnguardedDirectDatastoreAccessRule) Category() *types.RiskCategory {
+	return &types.RiskCategory{
+		ID:          "unguarded-direct-datastore-access",
 		Title:       "Unguarded Direct Datastore Access",
 		Description: "Data stores accessed across trust boundaries must be guarded by some protecting service or application.",
 		Impact:      "If this risk is unmitigated, attackers might be able to directly attack sensitive data stores without any protecting components in-between.",
@@ -23,7 +23,7 @@ func (*UnguardedDirectDatastoreAccessRule) Category() types.RiskCategory {
 		Check:       "Are recommendations from the linked cheat sheet and referenced ASVS chapter applied?",
 		Function:    types.Architecture,
 		STRIDE:      types.ElevationOfPrivilege,
-		DetectionLogic: "In-scope technical assets of type " + types.Datastore.String() + " (except " + types.IdentityStoreLDAP.String() + " when accessed from " + types.IdentityProvider.String() + " and " + types.FileServer.String() + " when accessed via file transfer protocols) with confidentiality rating " +
+		DetectionLogic: "In-scope technical assets of type " + types.Datastore.String() + " (except " + types.IdentityStoreLDAP + " when accessed from " + types.IdentityProvider + " and " + types.FileServer + " when accessed via file transfer protocols) with confidentiality rating " +
 			"of " + types.Confidential.String() + " (or higher) or with integrity rating of " + types.Critical.String() + " (or higher) " +
 			"which have incoming data-flows from assets outside across a network trust-boundary. DevOps config and deployment access is excluded from this risk.", // TODO new rule "missing bastion host"?
 		RiskAssessment: "The matching technical assets are at " + types.LowSeverity.String() + " risk. When either the " +
@@ -42,17 +42,17 @@ func (*UnguardedDirectDatastoreAccessRule) SupportedTags() []string {
 
 // check for data stores that should not be accessed directly across trust boundaries
 
-func (r *UnguardedDirectDatastoreAccessRule) GenerateRisks(input *types.ParsedModel) []types.Risk {
-	risks := make([]types.Risk, 0)
+func (r *UnguardedDirectDatastoreAccessRule) GenerateRisks(input *types.Model) ([]*types.Risk, error) {
+	risks := make([]*types.Risk, 0)
 	for _, id := range input.SortedTechnicalAssetIDs() {
 		technicalAsset := input.TechnicalAssets[id]
 		if !technicalAsset.OutOfScope && technicalAsset.Type == types.Datastore {
 			for _, incomingAccess := range input.IncomingTechnicalCommunicationLinksMappedByTargetId[technicalAsset.Id] {
 				sourceAsset := input.TechnicalAssets[incomingAccess.SourceId]
-				if (technicalAsset.Technology == types.IdentityStoreLDAP || technicalAsset.Technology == types.IdentityStoreDatabase) &&
-					sourceAsset.Technology == types.IdentityProvider {
+				if technicalAsset.Technologies.GetAttribute(types.IsIdentityStore) && sourceAsset.Technologies.GetAttribute(types.IdentityProvider) {
 					continue
 				}
+
 				if technicalAsset.Confidentiality >= types.Confidential || technicalAsset.Integrity >= types.Critical {
 					if incomingAccess.IsAcrossTrustBoundaryNetworkOnly(input) && !fileServerAccessViaFTP(technicalAsset, incomingAccess) &&
 						incomingAccess.Usage != types.DevOps && !isSharingSameParentTrustBoundary(input, technicalAsset, sourceAsset) {
@@ -65,10 +65,10 @@ func (r *UnguardedDirectDatastoreAccessRule) GenerateRisks(input *types.ParsedMo
 			}
 		}
 	}
-	return risks
+	return risks, nil
 }
 
-func isSharingSameParentTrustBoundary(input *types.ParsedModel, left, right types.TechnicalAsset) bool {
+func isSharingSameParentTrustBoundary(input *types.Model, left, right *types.TechnicalAsset) bool {
 	tbIDLeft, tbIDRight := left.GetTrustBoundaryId(input), right.GetTrustBoundaryId(input)
 	if len(tbIDLeft) == 0 && len(tbIDRight) > 0 {
 		return false
@@ -94,18 +94,18 @@ func isSharingSameParentTrustBoundary(input *types.ParsedModel, left, right type
 	return false
 }
 
-func fileServerAccessViaFTP(technicalAsset types.TechnicalAsset, incomingAccess types.CommunicationLink) bool {
-	return technicalAsset.Technology == types.FileServer &&
+func fileServerAccessViaFTP(technicalAsset *types.TechnicalAsset, incomingAccess *types.CommunicationLink) bool {
+	return technicalAsset.Technologies.GetAttribute(types.FileServer) &&
 		(incomingAccess.Protocol == types.FTP || incomingAccess.Protocol == types.FTPS || incomingAccess.Protocol == types.SFTP)
 }
 
-func (r *UnguardedDirectDatastoreAccessRule) createRisk(dataStore types.TechnicalAsset, dataFlow types.CommunicationLink, clientOutsideTrustBoundary types.TechnicalAsset, moreRisky bool) types.Risk {
+func (r *UnguardedDirectDatastoreAccessRule) createRisk(dataStore *types.TechnicalAsset, dataFlow *types.CommunicationLink, clientOutsideTrustBoundary *types.TechnicalAsset, moreRisky bool) *types.Risk {
 	impact := types.LowImpact
 	if moreRisky || dataStore.RAA > 40 {
 		impact = types.MediumImpact
 	}
-	risk := types.Risk{
-		CategoryId:             r.Category().Id,
+	risk := &types.Risk{
+		CategoryId:             r.Category().ID,
 		Severity:               types.CalculateSeverity(types.Likely, impact),
 		ExploitationLikelihood: types.Likely,
 		ExploitationImpact:     impact,
